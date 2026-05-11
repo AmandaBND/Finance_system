@@ -1,0 +1,17 @@
+[phases.setup]
+# Node 20 + build tools required by better-sqlite3 (native addon)
+nixPkgs = ["nodejs_20", "python3", "gcc", "gnumake"]
+
+[phases.install]
+cmds = [
+  "npm install --prefix frontend",
+  "npm install --prefix backend"
+]
+
+[phases.build]
+cmds = [
+  "npm run build --prefix frontend"
+]
+
+[start]
+cmd = "node backend/src/server.js"

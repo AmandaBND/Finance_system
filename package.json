@@ -1,0 +1,14 @@
+{
+  "name": "groovymark-financial-system",
+  "version": "1.0.0",
+  "description": "GroovyMark Financial System — monorepo root",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "npm install --prefix frontend && npm run build --prefix frontend",
+    "start": "node backend/src/server.js",
+    "dev": "bash start.sh"
+  }
+}
