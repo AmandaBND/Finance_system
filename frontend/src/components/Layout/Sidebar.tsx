@@ -1,30 +1,34 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, TrendingUp, FileText, Receipt, Users2,
+  LayoutDashboard, TrendingUp, FileText, Receipt,
   RefreshCw, BarChart3, Settings, Users, Wallet, LogOut,
   FolderKanban, CheckSquare
 } from 'lucide-react'
+import { canAccessRole } from '../../lib/permissions'
 
 const nav = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/revenue', icon: TrendingUp, label: 'Revenue' },
-  { to: '/invoices', icon: FileText, label: 'Invoices' },
-  { to: '/expenses', icon: Receipt, label: 'Expenses' },
-  { to: '/salaries', icon: Wallet, label: 'Payroll' },
-  { to: '/recurring', icon: RefreshCw, label: 'Recurring' },
-  { to: '/clients', icon: Users, label: 'Clients' },
-  { to: '/projects', icon: FolderKanban, label: 'Projects' },
-  { to: '/tasks', icon: CheckSquare, label: 'Tasks' },
-  { to: '/reports', icon: BarChart3, label: 'Reports' },
+  { to: '/app/dashboard', icon: LayoutDashboard, label: 'Dashboard', section: 'dashboard' as const },
+  { to: '/app/revenue', icon: TrendingUp, label: 'Revenue', section: 'revenue' as const },
+  { to: '/app/invoices', icon: FileText, label: 'Invoices', section: 'invoices' as const },
+  { to: '/app/expenses', icon: Receipt, label: 'Expenses', section: 'expenses' as const },
+  { to: '/app/salaries', icon: Wallet, label: 'Payroll', section: 'salaries' as const },
+  { to: '/app/recurring', icon: RefreshCw, label: 'Recurring', section: 'recurring' as const },
+  { to: '/app/clients', icon: Users, label: 'Clients', section: 'clients' as const },
+  { to: '/app/projects', icon: FolderKanban, label: 'Projects', section: 'projects' as const },
+  { to: '/app/tasks', icon: CheckSquare, label: 'Tasks', section: 'tasks' as const },
+  { to: '/app/reports', icon: BarChart3, label: 'Reports', section: 'reports' as const },
 ]
 
 export default function Sidebar() {
   const navigate = useNavigate()
   const adminUser = localStorage.getItem('admin_user') || 'Admin'
+  const role = (localStorage.getItem('admin_auth_role') || 'admin').toLowerCase()
 
   function logout() {
     localStorage.removeItem('admin_token')
     localStorage.removeItem('admin_user')
+    localStorage.removeItem('admin_auth_role')
+    localStorage.removeItem('admin_first_login')
     navigate('/login', { replace: true })
   }
 
@@ -46,7 +50,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         <p className="text-slate-600 text-xs font-semibold uppercase tracking-widest px-3 py-2 mb-1">Main Menu</p>
-        {nav.map(({ to, icon: Icon, label }) => (
+        {nav.filter(({ section }) => canAccessRole(role, section)).map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
@@ -62,13 +66,15 @@ export default function Sidebar() {
 
       {/* Settings at bottom */}
       <div className="px-3 pb-4 border-t border-white/10 pt-3">
+        {canAccessRole(role, 'settings') && (
         <NavLink
-          to="/settings"
+          to="/app/settings"
           className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
         >
           <Settings size={17} />
           <span>Settings</span>
         </NavLink>
+        )}
         <div className="mt-3 px-3 py-2">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-full bg-primary/30 flex items-center justify-center">
@@ -76,7 +82,7 @@ export default function Sidebar() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-xs font-medium truncate">{adminUser}</p>
-              <p className="text-slate-500 text-xs">Super Admin</p>
+              <p className="text-slate-500 text-xs capitalize">{role}</p>
             </div>
             <button onClick={logout} title="Logout" className="p-1 text-slate-500 hover:text-red-400 rounded transition-colors">
               <LogOut size={14} />

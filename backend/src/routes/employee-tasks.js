@@ -5,26 +5,22 @@ const empAuth  = require('../middleware/employeeAuth');
 
 router.use(empAuth);
 
-// Helper: attach resources to tasks
-function withResources(tasks) {
+function withResources(tasks, cid) {
   return tasks.map(t => ({
     ...t,
-    resources: db.prepare('SELECT * FROM task_resources WHERE task_id=? ORDER BY id').all(t.id),
+    resources: db.prepare('SELECT * FROM task_resources WHERE task_id=? AND company_id=? ORDER BY id').all(t.id, cid),
   }));
 }
 
-// Helper: seconds elapsed since timer_started_at
 function elapsedSince(isoStr) {
   if (!isoStr) return 0;
   return Math.max(0, Math.floor((Date.now() - new Date(isoStr).getTime()) / 1000));
 }
 
-// ── Notices for this employee ──────────────────────────────────────────────
 router.get('/tasks/notices', (req, res) => {
   try {
-    const { employeeId } = req.employee;
-    const all = db.prepare(`SELECT * FROM employee_notices WHERE is_active=1 ORDER BY created_at DESC`).all();
-    // Filter: 'all' target, or specific target that includes this employee
+    const { employeeId, companyId } = req.employee;
+    const all = db.prepare(`SELECT * FROM employee_notices WHERE company_id=? AND is_active=1 ORDER BY created_at DESC`).all(companyId);
     const notices = all.filter(n => {
       if (n.target === 'all') return true;
       try {
@@ -36,19 +32,18 @@ router.get('/tasks/notices', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Task list ──────────────────────────────────────────────────────────────
 router.get('/tasks', (req, res) => {
   try {
-    const { employeeId } = req.employee;
+    const { employeeId, companyId } = req.employee;
     const { status, date_from, date_to } = req.query;
 
     let sql = `
       SELECT t.*, p.name as project_name
       FROM tasks t
-      LEFT JOIN projects p ON p.id = t.project_id
-      WHERE t.assigned_to = ?
+      LEFT JOIN projects p ON p.id = t.project_id AND p.company_id=t.company_id
+      WHERE t.company_id=? AND t.assigned_to = ?
     `;
-    const params = [employeeId];
+    const params = [companyId, employeeId];
 
     if (status && status !== 'all') {
       if (status === 'ongoing') {
@@ -65,35 +60,33 @@ router.get('/tasks', (req, res) => {
     sql += ' ORDER BY CASE t.status WHEN \'overdue\' THEN 0 WHEN \'in_progress\' THEN 1 WHEN \'on_hold\' THEN 2 WHEN \'pending\' THEN 3 WHEN \'completed\' THEN 4 ELSE 5 END, t.due_date, t.priority';
 
     const tasks = db.prepare(sql).all(...params);
-    res.json(withResources(tasks));
+    res.json(withResources(tasks, companyId));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Timer: Start ───────────────────────────────────────────────────────────
 router.post('/tasks/:id/start', (req, res) => {
   try {
-    const { employeeId } = req.employee;
-    const task = db.prepare('SELECT * FROM tasks WHERE id=? AND assigned_to=?').get(req.params.id, employeeId);
+    const { employeeId, companyId } = req.employee;
+    const task = db.prepare('SELECT * FROM tasks WHERE company_id=? AND id=? AND assigned_to=?').get(companyId, req.params.id, employeeId);
     if (!task) return res.status(404).json({ error: 'Task not found' });
     if (task.status === 'completed') return res.status(400).json({ error: 'Task already completed' });
     if (task.status === 'overdue')   return res.status(400).json({ error: 'Task is overdue — cannot start' });
-    if (task.timer_status === 'running') return res.json(withResources([task])[0]); // idempotent
+    if (task.timer_status === 'running') return res.json(withResources([task], companyId)[0]);
 
     db.prepare(`
       UPDATE tasks SET status='in_progress', timer_status='running',
-        timer_started_at=datetime('now') WHERE id=?
-    `).run(task.id);
+        timer_started_at=datetime('now') WHERE id=? AND company_id=?
+    `).run(task.id, companyId);
 
-    const updated = db.prepare('SELECT * FROM tasks WHERE id=?').get(task.id);
-    res.json(withResources([updated])[0]);
+    const updated = db.prepare('SELECT * FROM tasks WHERE id=? AND company_id=?').get(task.id, companyId);
+    res.json(withResources([updated], companyId)[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Timer: Hold ────────────────────────────────────────────────────────────
 router.post('/tasks/:id/hold', (req, res) => {
   try {
-    const { employeeId } = req.employee;
-    const task = db.prepare('SELECT * FROM tasks WHERE id=? AND assigned_to=?').get(req.params.id, employeeId);
+    const { employeeId, companyId } = req.employee;
+    const task = db.prepare('SELECT * FROM tasks WHERE company_id=? AND id=? AND assigned_to=?').get(companyId, req.params.id, employeeId);
     if (!task) return res.status(404).json({ error: 'Task not found' });
     if (task.timer_status !== 'running') return res.status(400).json({ error: 'Timer is not running' });
 
@@ -101,37 +94,35 @@ router.post('/tasks/:id/hold', (req, res) => {
     db.prepare(`
       UPDATE tasks SET status='on_hold', timer_status='paused',
         timer_started_at=NULL, total_seconds=total_seconds+?
-      WHERE id=?
-    `).run(extra, task.id);
+      WHERE id=? AND company_id=?
+    `).run(extra, task.id, companyId);
 
-    const updated = db.prepare('SELECT * FROM tasks WHERE id=?').get(task.id);
-    res.json(withResources([updated])[0]);
+    const updated = db.prepare('SELECT * FROM tasks WHERE id=? AND company_id=?').get(task.id, companyId);
+    res.json(withResources([updated], companyId)[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Timer: Resume ──────────────────────────────────────────────────────────
 router.post('/tasks/:id/resume', (req, res) => {
   try {
-    const { employeeId } = req.employee;
-    const task = db.prepare('SELECT * FROM tasks WHERE id=? AND assigned_to=?').get(req.params.id, employeeId);
+    const { employeeId, companyId } = req.employee;
+    const task = db.prepare('SELECT * FROM tasks WHERE company_id=? AND id=? AND assigned_to=?').get(companyId, req.params.id, employeeId);
     if (!task) return res.status(404).json({ error: 'Task not found' });
     if (task.status === 'overdue') return res.status(400).json({ error: 'Task is overdue — cannot resume' });
 
     db.prepare(`
       UPDATE tasks SET status='in_progress', timer_status='running',
-        timer_started_at=datetime('now') WHERE id=?
-    `).run(task.id);
+        timer_started_at=datetime('now') WHERE id=? AND company_id=?
+    `).run(task.id, companyId);
 
-    const updated = db.prepare('SELECT * FROM tasks WHERE id=?').get(task.id);
-    res.json(withResources([updated])[0]);
+    const updated = db.prepare('SELECT * FROM tasks WHERE id=? AND company_id=?').get(task.id, companyId);
+    res.json(withResources([updated], companyId)[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Timer: Complete ────────────────────────────────────────────────────────
 router.post('/tasks/:id/complete', (req, res) => {
   try {
-    const { employeeId } = req.employee;
-    const task = db.prepare('SELECT * FROM tasks WHERE id=? AND assigned_to=?').get(req.params.id, employeeId);
+    const { employeeId, companyId } = req.employee;
+    const task = db.prepare('SELECT * FROM tasks WHERE company_id=? AND id=? AND assigned_to=?').get(companyId, req.params.id, employeeId);
     if (!task) return res.status(404).json({ error: 'Task not found' });
     if (task.status === 'overdue') return res.status(400).json({ error: 'Task is overdue — only admin can mark as completed' });
     if (task.status === 'completed') return res.status(400).json({ error: 'Task already completed' });
@@ -143,41 +134,36 @@ router.post('/tasks/:id/complete', (req, res) => {
       UPDATE tasks SET status='completed', timer_status='idle',
         timer_started_at=NULL, total_seconds=?,
         completed_at=datetime('now')
-      WHERE id=?
-    `).run(totalSecs, task.id);
+      WHERE id=? AND company_id=?
+    `).run(totalSecs, task.id, companyId);
 
-    // Update employee KPI: increment tasks_completed for current month
     const month = new Date().toISOString().slice(0, 7);
-    const emp = db.prepare('SELECT name FROM employees WHERE id=?').get(employeeId);
+    const emp = db.prepare('SELECT name FROM employees WHERE id=? AND company_id=?').get(employeeId, companyId);
     db.prepare(`
-      INSERT INTO employee_kpi (employee_id, employee_name, month, tasks_completed)
-      VALUES (?,?,?,1)
+      INSERT INTO employee_kpi (employee_id, employee_name, month, tasks_completed, company_id)
+      VALUES (?,?,?,?,?)
       ON CONFLICT(employee_id, month) DO UPDATE SET tasks_completed = tasks_completed + 1
-    `).run(employeeId, emp?.name || '', month);
+    `).run(employeeId, emp?.name || '', month, 1, companyId);
 
-    const updated = db.prepare('SELECT * FROM tasks WHERE id=?').get(task.id);
-    res.json({ task: withResources([updated])[0], totalSeconds: totalSecs });
+    const updated = db.prepare('SELECT * FROM tasks WHERE id=? AND company_id=?').get(task.id, companyId);
+    res.json({ task: withResources([updated], companyId)[0], totalSeconds: totalSecs });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Birthday Wish ──────────────────────────────────────────────────────────
-
-// GET /api/employee/birthday-wish — get latest unseen wish for this employee
 router.get('/birthday-wish', (req, res) => {
   try {
-    const { employeeId } = req.employee;
+    const { employeeId, companyId } = req.employee;
     const wish = db.prepare(
-      `SELECT * FROM birthday_wishes WHERE employee_id=? AND seen=0 ORDER BY sent_at DESC LIMIT 1`
-    ).get(employeeId);
+      `SELECT * FROM birthday_wishes WHERE company_id=? AND employee_id=? AND seen=0 ORDER BY sent_at DESC LIMIT 1`
+    ).get(companyId, employeeId);
     res.json(wish || null);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// POST /api/employee/birthday-wish/seen — mark wish as seen
 router.post('/birthday-wish/seen', (req, res) => {
   try {
-    const { employeeId } = req.employee;
-    db.prepare(`UPDATE birthday_wishes SET seen=1 WHERE employee_id=? AND seen=0`).run(employeeId);
+    const { employeeId, companyId } = req.employee;
+    db.prepare(`UPDATE birthday_wishes SET seen=1 WHERE company_id=? AND employee_id=? AND seen=0`).run(companyId, employeeId);
     res.json({ message: 'Marked as seen' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

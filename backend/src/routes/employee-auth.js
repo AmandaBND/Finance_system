@@ -14,7 +14,7 @@ router.post('/login', async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
     const cred = db.prepare(`
-      SELECT ec.*, e.name as employee_name, e.email as employee_email, e.position as employee_position, e.department
+      SELECT ec.*, e.name as employee_name, e.email as employee_email, e.position as employee_position, e.department, e.company_id as tenantCompanyId
       FROM employee_credentials ec
       JOIN employees e ON e.id = ec.employee_id
       WHERE ec.username = ? AND ec.is_active = 1
@@ -35,6 +35,7 @@ router.post('/login', async (req, res) => {
       employeeEmail: cred.employee_email,
       employeePosition: cred.employee_position,
       department: cred.department,
+      companyId: cred.tenantCompanyId,
     };
 
     const token = jwt.sign(payload, SECRET, { expiresIn: '7d' });
@@ -55,8 +56,8 @@ router.get('/me', employeeAuth, (req, res) => {
     SELECT e.*, ec.username, ec.last_login, ec.is_active
     FROM employees e
     JOIN employee_credentials ec ON ec.employee_id = e.id
-    WHERE e.id = ?
-  `).get(req.employee.employeeId);
+    WHERE e.id = ? AND e.company_id = ?
+  `).get(req.employee.employeeId, req.employee.companyId);
   if (!emp) return res.status(404).json({ error: 'Employee not found' });
   res.json(emp);
 });

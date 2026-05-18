@@ -1,4 +1,5 @@
 const db = require('../database');
+const { formatSriLankaTime } = require('../utils/timezoneHelper');
 
 const SUPPORTED_CURRENCIES = ['LKR', 'USD', 'EUR', 'GBP', 'AUD', 'SGD', 'INR', 'CAD', 'JPY'];
 
@@ -36,7 +37,7 @@ async function refreshRates() {
   try {
     const rates = await fetchRatesFromAPI();
     db.prepare('UPDATE exchange_rates SET rates_json=?, updated_at=CURRENT_TIMESTAMP WHERE id=1').run(JSON.stringify(rates));
-    console.log('✅ Exchange rates refreshed:', new Date().toLocaleTimeString());
+    console.log('✅ Exchange rates refreshed:', formatSriLankaTime(new Date(), 'HH:mm:ss'));
     return rates;
   } catch (err) {
     console.error('⚠️  Rate refresh failed:', err.message, '(using cached/fallback rates)');

@@ -451,6 +451,9 @@ function initializeDatabase() {
     try { db.exec(sql); } catch (_) { /* column already exists */ }
   });
 
+  const { runSaasMigrations } = require('./saasPhase1Migrate');
+  runSaasMigrations(db);
+
   // Initialize default admin password if not set
   const bcrypt = require('bcryptjs');
   const adminSettings = db.prepare('SELECT admin_password_hash FROM settings WHERE id=1').get();

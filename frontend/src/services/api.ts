@@ -2,6 +2,12 @@ import axios from 'axios'
 
 const api = axios.create({ baseURL: '/api', timeout: 30000 })
 
+api.interceptors.request.use(config => {
+  const t = localStorage.getItem('admin_token')
+  if (t) config.headers.Authorization = `Bearer ${t}`
+  return config
+})
+
 api.interceptors.response.use(
   r => r,
   err => {
@@ -11,8 +17,45 @@ api.interceptors.response.use(
 )
 
 export const authApi = {
-  login: (username: string, password: string) => axios.post('/api/auth/login', { username, password }),
+  login: (body: { username?: string; password?: string; email?: string }) => api.post('/auth/login', body),
+  me: () => api.get('/auth/me'),
   changePassword: (data: any) => api.put('/auth/change-password', data),
+  signupRequestOtp: (data: {
+    company_name: string
+    full_name: string
+    email: string
+    password: string
+    confirm_password: string
+    plan?: string
+    heard_from?: string
+  }) => api.post('/auth/signup/request-otp', data),
+  signupVerify: (email: string, otp: string) => api.post('/auth/signup/verify', { email, otp }),
+  signupResend: (email: string) => api.post('/auth/signup/resend-otp', { email }),
+  googleAuth: (credential: string, extra?: { company_name?: string; plan?: string; heard_from?: string }) =>
+    api.post('/auth/google', { credential, ...extra }),
+}
+
+export const onboardingApi = {
+  selectPlan: (plan: string) => api.post('/onboarding/plan', { plan }),
+}
+
+const superApi = axios.create({ baseURL: '/api', timeout: 30000 })
+superApi.interceptors.request.use(config => {
+  const t = localStorage.getItem('superadmin_token')
+  if (t) config.headers.Authorization = `Bearer ${t}`
+  return config
+})
+
+export const superadminApi = {
+  login: (email: string, password: string) => axios.post('/api/superadmin/login', { email, password }),
+  stats: () => superApi.get('/superadmin/stats'),
+  companies: (params?: { q?: string; plan?: string; status?: string }) => superApi.get('/superadmin/companies', { params }),
+  company: (id: string) => superApi.get(`/superadmin/companies/${id}`),
+  patchCompany: (id: string, data: { plan?: string; status?: string }) => superApi.patch(`/superadmin/companies/${id}`, data),
+  activity: () => superApi.get('/superadmin/activity'),
+  addNote: (companyId: string, note: string) => superApi.post(`/superadmin/companies/${companyId}/notes`, { note }),
+  resetOwnerPassword: (companyId: string, new_password: string) =>
+    superApi.post(`/superadmin/companies/${companyId}/reset-owner-password`, { new_password }),
 }
 
 export const dashboardApi = {

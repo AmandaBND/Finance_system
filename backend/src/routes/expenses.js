@@ -12,9 +12,10 @@ const upload = multer({ storage });
 
 router.get('/', (req, res) => {
   try {
+    const cid = req.companyId;
     const { category, search, from, to } = req.query;
-    let query = 'SELECT * FROM expenses WHERE 1=1';
-    const params = [];
+    let query = 'SELECT * FROM expenses WHERE company_id=?';
+    const params = [cid];
     if (category) { query += ' AND category=?'; params.push(category); }
     if (search) { query += ' AND (title LIKE ? OR vendor LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
     if (from) { query += ' AND payment_date >= ?'; params.push(from); }
@@ -26,39 +27,43 @@ router.get('/', (req, res) => {
 
 router.post('/', upload.single('receipt'), (req, res) => {
   try {
+    const cid = req.companyId;
     const { title, category, vendor, amount, payment_date, payment_method, is_recurring, billing_cycle, notes, currency } = req.body;
     const receipt_path = req.file ? `/uploads/receipts/${req.file.filename}` : null;
     const result = db.prepare(`
-      INSERT INTO expenses (title, category, vendor, amount, payment_date, payment_method, is_recurring, billing_cycle, receipt_path, notes, currency)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)
-    `).run(title, category, vendor, amount, payment_date, payment_method, is_recurring || 0, billing_cycle, receipt_path, notes, currency || 'LKR');
+      INSERT INTO expenses (title, category, vendor, amount, payment_date, payment_method, is_recurring, billing_cycle, receipt_path, notes, currency, company_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    `).run(title, category, vendor, amount, payment_date, payment_method, is_recurring || 0, billing_cycle, receipt_path, notes, currency || 'LKR', cid);
     res.json({ id: result.lastInsertRowid, message: 'Expense added' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.put('/:id', upload.single('receipt'), (req, res) => {
   try {
+    const cid = req.companyId;
     const { title, category, vendor, amount, payment_date, payment_method, is_recurring, billing_cycle, notes, currency } = req.body;
-    const existing = db.prepare('SELECT * FROM expenses WHERE id=?').get(req.params.id);
-    const receipt_path = req.file ? `/uploads/receipts/${req.file.filename}` : existing?.receipt_path;
+    const existing = db.prepare('SELECT * FROM expenses WHERE id=? AND company_id=?').get(req.params.id, cid);
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    const receipt_path = req.file ? `/uploads/receipts/${req.file.filename}` : existing.receipt_path;
     db.prepare(`
       UPDATE expenses SET title=?, category=?, vendor=?, amount=?, payment_date=?, payment_method=?, is_recurring=?, billing_cycle=?, receipt_path=?, notes=?, currency=?
-      WHERE id=?
-    `).run(title, category, vendor, amount, payment_date, payment_method, is_recurring, billing_cycle, receipt_path, notes, currency || 'LKR', req.params.id);
+      WHERE id=? AND company_id=?
+    `).run(title, category, vendor, amount, payment_date, payment_method, is_recurring, billing_cycle, receipt_path, notes, currency || 'LKR', req.params.id, cid);
     res.json({ message: 'Updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.delete('/:id', (req, res) => {
   try {
-    db.prepare('DELETE FROM expenses WHERE id=?').run(req.params.id);
+    const r = db.prepare('DELETE FROM expenses WHERE id=? AND company_id=?').run(req.params.id, req.companyId);
+    if (!r.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ message: 'Deleted' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.get('/categories', (req, res) => {
   try {
-    const cats = db.prepare('SELECT DISTINCT category FROM expenses ORDER BY category').all().map(r => r.category);
+    const cats = db.prepare('SELECT DISTINCT category FROM expenses WHERE company_id=? ORDER BY category').all(req.companyId).map(r => r.category);
     res.json(cats);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

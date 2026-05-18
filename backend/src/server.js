@@ -20,38 +20,48 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// Auth
-app.use("/api/auth", require("./routes/auth"));
+const { requireCompanyAuth } = require('./middleware/companyAuth');
+const viewerReadOnly = require('./middleware/viewerReadOnly');
+const hrBlock = require('./middleware/hrBlock');
 
-// Routes
-app.use('/api/dashboard', require('./routes/dashboard'));
-app.use('/api/revenue', require('./routes/revenue'));
-app.use('/api/invoices', require('./routes/invoices'));
-app.use('/api/expenses', require('./routes/expenses'));
-app.use('/api/employees', require('./routes/employees'));
-app.use('/api/salaries', require('./routes/salaries'));
-app.use('/api/recurring', require('./routes/recurring'));
-app.use('/api/clients', require('./routes/clients'));
-app.use('/api/reports', require('./routes/reports'));
-app.use('/api/settings', require('./routes/settings'));
-app.use('/api/notifications', require('./routes/notifications'));
-app.use('/api/ai', require('./routes/ai'));
-app.use('/api/currency', require('./routes/currency'));
+function companyStack() {
+  return [requireCompanyAuth, viewerReadOnly];
+}
+
+// Auth (no company guard)
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/onboarding', require('./routes/onboarding'));
+app.use('/api/superadmin', require('./routes/superadmin'));
+
+// Routes (tenant-scoped)
+app.use('/api/dashboard', ...companyStack(), require('./routes/dashboard'));
+app.use('/api/revenue', ...companyStack(), require('./routes/revenue'));
+app.use('/api/invoices', ...companyStack(), require('./routes/invoices'));
+app.use('/api/expenses', ...companyStack(), require('./routes/expenses'));
+app.use('/api/employees', ...companyStack(), hrBlock, require('./routes/employees'));
+app.use('/api/salaries', ...companyStack(), hrBlock, require('./routes/salaries'));
+app.use('/api/recurring', ...companyStack(), require('./routes/recurring'));
+app.use('/api/clients', ...companyStack(), require('./routes/clients'));
+app.use('/api/reports', ...companyStack(), require('./routes/reports'));
+app.use('/api/settings', ...companyStack(), require('./routes/settings'));
+app.use('/api/notifications', ...companyStack(), require('./routes/notifications'));
+app.use('/api/ai', ...companyStack(), require('./routes/ai'));
+app.use('/api/currency', ...companyStack(), require('./routes/currency'));
 
 // Client portal routes
 app.use('/api/portal', require('./routes/client-auth'));
 app.use('/api/portal', require('./routes/client-portal'));
-app.use('/api/portal-admin', require('./routes/portal-admin'));
+app.use('/api/portal-admin', ...companyStack(), hrBlock, require('./routes/portal-admin'));
 
 // Employee portal routes
 app.use('/api/employee', require('./routes/employee-auth'));
 app.use('/api/employee', require('./routes/employee-portal'));
 app.use('/api/employee', require('./routes/employee-tasks'));
-app.use('/api/employee-admin', require('./routes/employee-admin'));
+app.use('/api/employee-admin', ...companyStack(), hrBlock, require('./routes/employee-admin'));
 
 // Project & Task management routes
-app.use('/api/projects', require('./routes/projects'));
-app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/projects', ...companyStack(), require('./routes/projects'));
+app.use('/api/tasks', ...companyStack(), require('./routes/tasks'));
 
 // Serve payment slip uploads
 const fs = require('fs');

@@ -2,14 +2,21 @@ const nodemailer = require('nodemailer');
 const db = require('../database');
 const fs = require('fs');
 
-function getTransporter(settings) {
+function getTransporter(settings = {}) {
+  const host = (process.env.SMTP_HOST || settings.smtp_host || '').trim();
+  const port = parseInt(process.env.SMTP_PORT || settings.smtp_port || '465', 10);
+  const secureRaw = process.env.SMTP_SECURE ?? settings.smtp_secure;
+  const secure = String(secureRaw || '').toLowerCase() === 'true' || String(secureRaw) === '1' || port === 465;
+  const user = (process.env.SMTP_USER || settings.smtp_user || '').trim();
+  const pass = (process.env.SMTP_PASS || settings.smtp_pass || '').trim().replace(/\s+/g, '');
+
   return nodemailer.createTransport({
-    host: settings.smtp_host || process.env.SMTP_HOST,
-    port: parseInt(settings.smtp_port || process.env.SMTP_PORT || 465),
-    secure: settings.smtp_secure !== 0,
+    host,
+    port,
+    secure,
     auth: {
-      user: settings.smtp_user || process.env.SMTP_USER,
-      pass: settings.smtp_pass || process.env.SMTP_PASS
+      user,
+      pass
     },
     tls: { rejectUnauthorized: false }
   });
@@ -384,4 +391,32 @@ async function sendLeaveRejectionEmail(leaveRequest, adminNotes, settings) {
   });
 }
 
-module.exports = { sendInvoiceEmail, sendPaymentReminderEmail, sendRecurringReminderEmail, sendSalarySlipEmail, sendTestEmail, sendLeaveRequestEmail, sendLeaveApprovalEmail, sendLeaveRejectionEmail };
+const { SEED_COMPANY_ID } = require('../saasPhase1Migrate');
+
+async function sendOtpEmail(toEmail, code) {
+  const settings = db.prepare('SELECT * FROM settings WHERE company_id=? LIMIT 1').get(SEED_COMPANY_ID)
+    || db.prepare('SELECT * FROM settings WHERE id=1').get();
+
+  const smtpUser = process.env.SMTP_USER || settings?.smtp_user;
+  if (!smtpUser) {
+    console.warn('[OTP] No SMTP configured; code for', toEmail, ':', code);
+    return;
+  }
+
+  const transporter = getTransporter(settings);
+  const fromName = settings?.company_name || 'GroovyMark Finance';
+  const fromEmail = smtpUser;
+
+  await transporter.sendMail({
+    from: `"${fromName}" <${fromEmail}>`,
+    to: toEmail,
+    subject: `${code} is your verification code`,
+    text: `Your verification code is: ${code}\n\nIt expires in 10 minutes.`,
+    html: `<p>Your verification code is:</p><p style="font-size:28px;font-weight:bold;letter-spacing:4px">${code}</p><p style="color:#64748b;font-size:13px">Expires in 10 minutes.</p>`,
+  });
+}
+
+module.exports = {
+  sendInvoiceEmail, sendPaymentReminderEmail, sendRecurringReminderEmail, sendSalarySlipEmail, sendTestEmail,
+  sendLeaveRequestEmail, sendLeaveApprovalEmail, sendLeaveRejectionEmail, sendOtpEmail,
+};

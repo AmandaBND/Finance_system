@@ -2,12 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 const { generateInsights } = require('../services/aiService');
-const { format, subMonths, startOfMonth, endOfMonth } = require('date-fns');
 
 router.get('/insights', async (req, res) => {
   try {
-    // Check cache (refresh every 6 hours)
-    const cache = db.prepare('SELECT * FROM ai_cache WHERE id=1').get();
+    const companyId = req.companyId;
+    const cache = db.prepare('SELECT * FROM ai_cache WHERE company_id=? LIMIT 1').get(companyId);
     if (cache?.generated_at) {
       const ageHours = (Date.now() - new Date(cache.generated_at).getTime()) / (1000 * 60 * 60);
       if (ageHours < 6 && cache.insights) {
@@ -22,7 +21,7 @@ router.get('/insights', async (req, res) => {
       }
     }
 
-    const result = await generateInsights();
+    const result = await generateInsights(false, companyId);
     res.json({ ...result, cached: false });
   } catch (err) {
     console.error('AI insights error:', err);
@@ -32,7 +31,7 @@ router.get('/insights', async (req, res) => {
 
 router.post('/refresh', async (req, res) => {
   try {
-    const result = await generateInsights(true);
+    const result = await generateInsights(true, req.companyId);
     res.json({ ...result, message: 'AI insights refreshed' });
   } catch (err) {
     res.status(500).json({ error: err.message });

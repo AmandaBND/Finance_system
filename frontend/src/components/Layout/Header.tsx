@@ -3,17 +3,20 @@ import { useLocation } from 'react-router-dom'
 import { Bell, RefreshCw } from 'lucide-react'
 import { notificationApi } from '../../services/api'
 import { format } from 'date-fns'
+import { formatLocalDateTime } from '../../lib/dateTime'
 
 const pageTitles: Record<string, string> = {
-  '/dashboard': 'Dashboard',
-  '/revenue': 'Revenue',
-  '/invoices': 'Invoices',
-  '/expenses': 'Expenses',
-  '/salaries': 'Payroll',
-  '/recurring': 'Recurring Payments',
-  '/clients': 'Clients',
-  '/reports': 'Reports',
-  '/settings': 'Settings',
+  '/app/dashboard': 'Dashboard',
+  '/app/revenue': 'Revenue',
+  '/app/invoices': 'Invoices',
+  '/app/expenses': 'Expenses',
+  '/app/salaries': 'Payroll',
+  '/app/recurring': 'Recurring Payments',
+  '/app/clients': 'Clients',
+  '/app/projects': 'Projects',
+  '/app/tasks': 'Tasks',
+  '/app/reports': 'Reports',
+  '/app/settings': 'Settings',
 }
 
 export default function Header() {
@@ -99,7 +102,7 @@ export default function Header() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-700 truncate">{n.title}</p>
                         <p className="text-xs text-slate-500 mt-0.5">{n.message}</p>
-                        <p className="text-xs text-slate-400 mt-1">{n.created_at?.slice(0, 16)}</p>
+                        <p className="text-xs text-slate-400 mt-1">{formatLocalDateTime(n.created_at)}</p>
                       </div>
                     </div>
                   </div>

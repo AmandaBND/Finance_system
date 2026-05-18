@@ -14,7 +14,7 @@ router.post('/login', (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
     const cred = db.prepare(`
-      SELECT cc.*, c.name as client_name, c.email as client_email, c.company as client_company
+      SELECT cc.*, c.name as client_name, c.email as client_email, c.company as client_company, c.company_id as tenantCompanyId
       FROM client_credentials cc
       JOIN clients c ON c.id = cc.client_id
       WHERE cc.username = ?
@@ -35,6 +35,7 @@ router.post('/login', (req, res) => {
       clientName: cred.client_name,
       clientEmail: cred.client_email,
       clientCompany: cred.client_company,
+      companyId: cred.tenantCompanyId,
     };
     const token = jwt.sign(payload, SECRET, { expiresIn: '7d' });
 
@@ -45,7 +46,7 @@ router.post('/login', (req, res) => {
 // GET /api/portal/me (protected)
 router.get('/me', clientAuth, (req, res) => {
   try {
-    const client = db.prepare(`SELECT c.*, cc.username, cc.is_active, cc.last_login FROM clients c JOIN client_credentials cc ON cc.client_id = c.id WHERE c.id = ?`).get(req.client.clientId);
+    const client = db.prepare(`SELECT c.*, cc.username, cc.is_active, cc.last_login FROM clients c JOIN client_credentials cc ON cc.client_id = c.id WHERE c.id = ? AND c.company_id = ?`).get(req.client.clientId, req.client.companyId);
     if (!client) return res.status(404).json({ error: 'Client not found' });
     res.json(client);
   } catch (err) { res.status(500).json({ error: err.message }); }
