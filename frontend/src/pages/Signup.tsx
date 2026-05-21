@@ -103,6 +103,7 @@ export default function Signup() {
       localStorage.setItem('admin_user', res.data.user?.name || '')
       localStorage.setItem('admin_first_login', res.data.first_login ? '1' : '0')
       if (res.data.first_login) navigate('/onboarding/plans', { replace: true })
+      else if (!res.data.currency_locked) navigate('/onboarding/currency', { replace: true })
       else navigate('/app/dashboard', { replace: true })
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Google signup failed')

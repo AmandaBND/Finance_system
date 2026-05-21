@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { salaryApi, employeeApi, employeeAdminApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
+import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Edit2, Trash2, X, Send, Download, CheckCircle, Users2, Zap, Briefcase } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
 const STATUS_COLORS: any = { Paid: 'bg-emerald-100 text-emerald-700', Pending: 'bg-amber-100 text-amber-700' }
-const EMPTY = { employee_id: '', employee_name: '', position: '', department: '', salary_type: 'Monthly', base_salary: '', bonuses: 0, deductions: 0, payment_month: format(new Date(), 'yyyy-MM'), payment_date: '', payment_method: 'Bank Transfer', notes: '', currency: 'LKR' }
+const EMPTY = { employee_id: '', employee_name: '', position: '', department: '', salary_type: 'Monthly', base_salary: '', bonuses: 0, deductions: 0, net_salary_primary: '', payment_month: format(new Date(), 'yyyy-MM'), payment_date: '', payment_method: 'Bank Transfer', notes: '', currency: 'LKR' }
 
 function CurrencySelector({ value, onChange, options }: { value: string, onChange: (v: string) => void, options: string[] }) {
   return (
@@ -57,9 +58,15 @@ export default function Salaries() {
   function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || defaultCurrency || 'USD' }); setModal(true) }
 
   async function save() {
+    const cur = form.currency || defaultCurrency || 'USD'
+    const net = (parseFloat(form.base_salary) || 0) + (parseFloat(form.bonuses) || 0) - (parseFloat(form.deductions) || 0)
+    const primaryErr = validatePrimaryAmount(cur, defaultCurrency, form.net_salary_primary)
+    if (primaryErr) { toast.error(primaryErr); return }
+    const payload = { ...form }
+    if (!needsPrimaryConversion(cur, defaultCurrency)) payload.net_salary_primary = net
     try {
-      if (editing) await salaryApi.update(editing.id, form)
-      else await salaryApi.create(form)
+      if (editing) await salaryApi.update(editing.id, payload)
+      else await salaryApi.create(payload)
       toast.success(editing ? 'Updated' : 'Salary record created')
       setModal(false); load()
     } catch (err: any) { toast.error(err.response?.data?.error || 'Error') }
@@ -265,7 +272,7 @@ export default function Salaries() {
                 <div><label className="label">Position</label><input className="input" value={form.position} onChange={e => setForm({...form, position: e.target.value})} /></div>
                 <div><label className="label">Department</label><input className="input" value={form.department} onChange={e => setForm({...form, department: e.target.value})} /></div>
                 <div><label className="label">Payment Month</label><input className="input" type="month" value={form.payment_month} onChange={e => setForm({...form, payment_month: e.target.value})} /></div>
-                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v})} /></div>
+                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v, net_salary_primary: v === defaultCurrency ? '' : form.net_salary_primary})} /></div>
                 <div><label className="label">Basic Salary ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'})</label><input className="input" type="number" value={form.base_salary} onChange={e => setForm({...form, base_salary: e.target.value})} /></div>
                 <div><label className="label">Bonuses ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'})</label><input className="input" type="number" value={form.bonuses} onChange={e => setForm({...form, bonuses: e.target.value})} /></div>
                 <div><label className="label">Deductions ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'})</label><input className="input" type="number" value={form.deductions} onChange={e => setForm({...form, deductions: e.target.value})} /></div>
@@ -274,6 +281,13 @@ export default function Salaries() {
                     {CURRENCY_SYMBOLS[form.currency] || 'Rs.'} {((parseFloat(form.base_salary)||0)+(parseFloat(form.bonuses)||0)-(parseFloat(form.deductions)||0)).toLocaleString('en-LK', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
+                <PrimaryCurrencyAmountField
+                  currency={form.currency || defaultCurrency}
+                  primaryCurrency={defaultCurrency}
+                  value={form.net_salary_primary}
+                  onChange={v => setForm({ ...form, net_salary_primary: v })}
+                  label="net salary"
+                />
                 <div><label className="label">Payment Method</label>
                   <select className="input" value={form.payment_method} onChange={e => setForm({...form, payment_method: e.target.value})}>
                     {['Bank Transfer','Cash','Check','Online'].map(m => <option key={m}>{m}</option>)}

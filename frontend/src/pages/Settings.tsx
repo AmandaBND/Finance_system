@@ -125,14 +125,19 @@ export default function Settings() {
     } catch { toast.error('Failed to load employee portal data') }
   }
 
+  const currencyLocked = !!form.currency_locked
+
   async function save() {
     try {
       setSaving(true)
-      const normalizedCurrency = (form.currency || 'USD').toUpperCase()
-      const payload = {
-        ...form,
-        currency: SUPPORTED_CURRENCIES.includes(normalizedCurrency) ? normalizedCurrency : 'USD',
-        currency_symbol: form.currency_symbol || CURRENCY_SYMBOLS[normalizedCurrency] || '$'
+      const payload: any = { ...form }
+      if (currencyLocked) {
+        delete payload.currency
+        delete payload.currency_symbol
+      } else {
+        const normalizedCurrency = (form.currency || 'USD').toUpperCase()
+        payload.currency = SUPPORTED_CURRENCIES.includes(normalizedCurrency) ? normalizedCurrency : 'USD'
+        payload.currency_symbol = form.currency_symbol || CURRENCY_SYMBOLS[payload.currency] || '$'
       }
       await settingsApi.update(payload)
       toast.success('Settings saved!')
@@ -449,12 +454,28 @@ export default function Settings() {
               </div>
               <p className="text-xs text-slate-400 mt-2">{allowedCurrencyNote}</p>
             </div>
-            <div><label className="label">Currency</label>
-              <select className="input" value={f('currency') || 'USD'} onChange={e => updateCurrencySelection(e.target.value)}>
-                {selectedCurrencies.map(c => <option key={c} value={c}>{c} — {CURRENCY_SYMBOLS[c]}</option>)}
-              </select>
+            <div>
+              <label className="label">Primary currency</label>
+              {currencyLocked ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+                  <span className="font-semibold text-slate-800">{f('currency') || 'USD'}</span>
+                  <span className="text-slate-500 ml-2">({f('currency_symbol') || CURRENCY_SYMBOLS[f('currency')] || '$'})</span>
+                  <p className="text-xs text-amber-700 mt-2">Primary currency was set during registration and cannot be changed.</p>
+                </div>
+              ) : (
+                <select className="input" value={f('currency') || 'USD'} onChange={e => updateCurrencySelection(e.target.value)}>
+                  {selectedCurrencies.map(c => <option key={c} value={c}>{c} — {CURRENCY_SYMBOLS[c]}</option>)}
+                </select>
+              )}
             </div>
-            <div><label className="label">Currency Symbol</label><input className="input" value={f('currency_symbol')} onChange={e => set('currency_symbol', e.target.value)} placeholder="$" /></div>
+            <div>
+              <label className="label">Currency symbol (display)</label>
+              {currencyLocked ? (
+                <input className="input bg-slate-50" value={f('currency_symbol')} readOnly />
+              ) : (
+                <input className="input" value={f('currency_symbol')} onChange={e => set('currency_symbol', e.target.value)} placeholder="$" />
+              )}
+            </div>
           </div>
         </div>
 

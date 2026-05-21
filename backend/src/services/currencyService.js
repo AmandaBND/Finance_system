@@ -123,19 +123,29 @@ function getDisplayRates(rates, baseCurrency = 'LKR') {
   }));
 }
 
-// Sum records in any target currency (each record has amount + currency field)
-function sumToCurrency(records, amountField = 'amount', currencyField = 'currency', targetCurrency = 'LKR', rates) {
+// Value in primary/reporting currency: prefers manual amount_primary for foreign-currency rows
+function recordValueInPrimary(rec, amountField = 'amount', currencyField = 'currency', targetCurrency = 'LKR', rates) {
   const r = rates || getRates();
-  return records.reduce((sum, rec) => {
-    const amt = parseFloat(rec[amountField]) || 0;
-    const cur = (rec[currencyField] || 'LKR').toUpperCase();
-    return sum + convert(amt, cur, targetCurrency, r);
-  }, 0);
+  const target = (targetCurrency || 'LKR').toUpperCase();
+  const cur = (rec[currencyField] || 'LKR').toUpperCase();
+  const raw = parseFloat(rec[amountField]) || 0;
+  const manual = rec.amount_primary != null && rec.amount_primary !== '' ? parseFloat(rec.amount_primary) : NaN;
+  if (Number.isFinite(manual) && manual >= 0) {
+    if (cur === target) return manual;
+    return manual;
+  }
+  if (cur === target) return raw;
+  return convert(raw, cur, target, r);
+}
+
+// Sum records in primary currency (each record has amount + currency; optional amount_primary)
+function sumToCurrency(records, amountField = 'amount', currencyField = 'currency', targetCurrency = 'LKR', rates) {
+  return records.reduce((sum, rec) => sum + recordValueInPrimary(rec, amountField, currencyField, targetCurrency, rates), 0);
 }
 
 module.exports = {
   refreshRates, getCachedRatesData, getRates,
   convertToLKR, convertFromLKR, convert, getRateToLKR,
-  getDisplayRates, sumToCurrency,
+  getDisplayRates, recordValueInPrimary, sumToCurrency,
   SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS, FALLBACK_RATES
 };

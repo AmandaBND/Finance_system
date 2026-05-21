@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+const { resolveAmountPrimary } = require('../lib/primaryCurrency');
 
 router.get('/', (req, res) => {
   try {
@@ -20,11 +21,18 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   try {
     const cid = req.companyId;
-    const { client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, payment_status, payment_method, is_recurring, billing_cycle, notes, currency } = req.body;
+    const { client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, payment_status, payment_method, is_recurring, billing_cycle, notes, currency, amount_primary } = req.body;
+    const currencyVal = currency || 'LKR';
+    let amountPrimary;
+    try {
+      amountPrimary = resolveAmountPrimary({ companyId: cid, currency: currencyVal, amount, amount_primary });
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message });
+    }
     const result = db.prepare(`
-      INSERT INTO revenue (client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, payment_status, payment_method, is_recurring, billing_cycle, notes, currency, company_id)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `).run(client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, payment_status || 'Pending', payment_method, is_recurring || 0, billing_cycle || 'One-time', notes, currency || 'LKR', cid);
+      INSERT INTO revenue (client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, amount_primary, payment_status, payment_method, is_recurring, billing_cycle, notes, currency, company_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).run(client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, amountPrimary, payment_status || 'Pending', payment_method, is_recurring || 0, billing_cycle || 'One-time', notes, currencyVal, cid);
     res.json({ id: result.lastInsertRowid, message: 'Revenue entry added' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -32,11 +40,18 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const cid = req.companyId;
-    const { client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, payment_status, payment_method, is_recurring, billing_cycle, notes, currency } = req.body;
+    const { client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, payment_status, payment_method, is_recurring, billing_cycle, notes, currency, amount_primary } = req.body;
+    const currencyVal = currency || 'LKR';
+    let amountPrimary;
+    try {
+      amountPrimary = resolveAmountPrimary({ companyId: cid, currency: currencyVal, amount, amount_primary });
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message });
+    }
     const r = db.prepare(`
-      UPDATE revenue SET client_name=?, project_name=?, service_type=?, invoice_number=?, invoice_date=?, due_date=?, amount=?, payment_status=?, payment_method=?, is_recurring=?, billing_cycle=?, notes=?, currency=?, updated_at=CURRENT_TIMESTAMP
+      UPDATE revenue SET client_name=?, project_name=?, service_type=?, invoice_number=?, invoice_date=?, due_date=?, amount=?, amount_primary=?, payment_status=?, payment_method=?, is_recurring=?, billing_cycle=?, notes=?, currency=?, updated_at=CURRENT_TIMESTAMP
       WHERE id=? AND company_id=?
-    `).run(client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, payment_status, payment_method, is_recurring, billing_cycle, notes, currency || 'LKR', req.params.id, cid);
+    `).run(client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, amountPrimary, payment_status, payment_method, is_recurring, billing_cycle, notes, currencyVal, req.params.id, cid);
     if (!r.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ message: 'Updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }

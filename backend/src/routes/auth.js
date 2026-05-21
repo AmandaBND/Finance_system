@@ -104,11 +104,14 @@ router.get('/me', requireCompanyAuth, (req, res) => {
     }
     const user = db.prepare('SELECT id, email, name, role, company_id, avatar_url FROM app_users WHERE id=?').get(req.appUserId);
     const company = db.prepare('SELECT id, name, plan, first_login, status FROM companies WHERE id=?').get(req.companyId);
+    const settings = db.prepare('SELECT currency, currency_locked FROM settings WHERE company_id=? LIMIT 1').get(req.companyId) || {};
     return res.json({
       authType: 'saas',
       user,
       company,
       first_login: !!(company && company.first_login),
+      currency_locked: !!settings.currency_locked,
+      primary_currency: settings.currency || null,
       role: user?.role,
     });
   } catch (err) {

@@ -38,14 +38,17 @@ function provisionNewCompany(db, { companyName, ownerEmail, ownerName, passwordH
       row.admin_username = null;
       row.admin_password_hash = null;
       row.logo_path = null;
+      row.currency = null;
+      row.currency_symbol = null;
+      row.currency_locked = 0;
       const cols = Object.keys(row).filter(k => row[k] !== undefined);
       const placeholders = cols.map(() => '?').join(',');
       const vals = cols.map(c => row[c]);
       db.prepare(`INSERT INTO settings (${cols.join(',')}) VALUES (${placeholders})`).run(...vals);
     } else {
       db.prepare(`
-        INSERT INTO settings (company_name, company_email, currency, currency_symbol, allowed_currencies, company_id)
-        VALUES (?, ?, 'USD', '$', '["LKR","USD"]', ?)
+        INSERT INTO settings (company_name, company_email, allowed_currencies, currency_locked, company_id)
+        VALUES (?, ?, '["LKR","USD"]', 0, ?)
       `).run(companyName, email, companyId);
     }
 

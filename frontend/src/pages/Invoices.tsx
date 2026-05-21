@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { invoiceApi, clientApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
+import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Search, Send, CheckCircle, Download, Trash2, Edit2, X, Building2, CreditCard } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -19,7 +20,7 @@ function CurrencySelector({ value, onChange, options }: { value: string, onChang
 }
 
 export default function Invoices() {
-  const { allowedCurrencies, defaultCurrency } = useCompanySettings()
+  const { allowedCurrencies, defaultCurrency, currencySymbol } = useCompanySettings()
   const [invoices, setInvoices] = useState<any[]>([])
   const [clients, setClients] = useState<any[]>([])
   const [search, setSearch] = useState('')
@@ -32,7 +33,7 @@ export default function Invoices() {
     issue_date: format(new Date(), 'yyyy-MM-dd'),
     due_date: format(new Date(Date.now() + 30 * 86400000), 'yyyy-MM-dd'),
     items: [{ ...EMPTY_ITEM }], tax_rate: 0, discount: 0, notes: '', terms: '', status: 'Draft',
-    currency: defaultCurrency || 'USD', payment_methods: 'bank'
+    currency: defaultCurrency || 'USD', payment_methods: 'bank', amount_primary: ''
   })
 
   useEffect(() => { load() }, [filterStatus, search])
@@ -45,7 +46,7 @@ export default function Invoices() {
 
   function openNew() {
     setEditing(null)
-    setForm({ client_name: '', client_email: '', client_address: '', client_company: '', issue_date: format(new Date(), 'yyyy-MM-dd'), due_date: format(new Date(Date.now() + 30 * 86400000), 'yyyy-MM-dd'), items: [{ ...EMPTY_ITEM }], tax_rate: 0, discount: 0, notes: '', terms: '', status: 'Draft', currency: defaultCurrency || 'USD', payment_methods: 'bank' })
+    setForm({ client_name: '', client_email: '', client_address: '', client_company: '', issue_date: format(new Date(), 'yyyy-MM-dd'), due_date: format(new Date(Date.now() + 30 * 86400000), 'yyyy-MM-dd'), items: [{ ...EMPTY_ITEM }], tax_rate: 0, discount: 0, notes: '', terms: '', status: 'Draft', currency: defaultCurrency || 'USD', payment_methods: 'bank', amount_primary: '' })
     setModal(true)
   }
 
@@ -77,9 +78,19 @@ export default function Invoices() {
   const total = subtotal + taxAmt - (parseFloat(form.discount) || 0)
 
   async function save() {
+    const cur = form.currency || defaultCurrency || 'USD'
+    const primaryErr = validatePrimaryAmount(cur, defaultCurrency, form.amount_primary)
+    if (primaryErr) { toast.error(primaryErr); return }
+    const payload = {
+      ...form,
+      subtotal,
+      tax_amount: taxAmt,
+      total,
+      amount_primary: needsPrimaryConversion(cur, defaultCurrency) ? form.amount_primary : total,
+    }
     try {
-      if (editing) await invoiceApi.update(editing.id, { ...form, subtotal, tax_amount: taxAmt, total })
-      else await invoiceApi.create({ ...form, subtotal, tax_amount: taxAmt, total })
+      if (editing) await invoiceApi.update(editing.id, payload)
+      else await invoiceApi.create(payload)
       toast.success(editing ? 'Invoice updated' : 'Invoice created')
       setModal(false)
       load()
@@ -221,8 +232,15 @@ export default function Invoices() {
                 <div><label className="label">Address</label><input className="input" value={form.client_address} onChange={e => setForm({...form, client_address: e.target.value})} /></div>
                 <div><label className="label">Issue Date</label><input className="input" type="date" value={form.issue_date} onChange={e => setForm({...form, issue_date: e.target.value})} /></div>
                 <div><label className="label">Due Date</label><input className="input" type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} /></div>
-                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v})} /></div>
+                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v, amount_primary: v === defaultCurrency ? '' : form.amount_primary})} /></div>
               </div>
+              <PrimaryCurrencyAmountField
+                currency={form.currency || defaultCurrency}
+                primaryCurrency={defaultCurrency}
+                value={form.amount_primary}
+                onChange={v => setForm({ ...form, amount_primary: v })}
+                label="invoice total"
+              />
 
               {/* Items */}
               <div>

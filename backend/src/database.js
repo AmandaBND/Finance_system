@@ -453,11 +453,16 @@ function initializeDatabase() {
     `ALTER TABLE settings ADD COLUMN admin_username TEXT DEFAULT 'admin'`,
     `ALTER TABLE settings ADD COLUMN admin_password_hash TEXT`,
     `ALTER TABLE settings ADD COLUMN allowed_currencies TEXT DEFAULT '["LKR","USD"]'`,
+    `ALTER TABLE settings ADD COLUMN currency_locked INTEGER DEFAULT 0`,
     `ALTER TABLE employees ADD COLUMN birthday DATE`,
   ];
   migrations.forEach(sql => {
     try { db.exec(sql); } catch (_) { /* column already exists */ }
   });
+
+  try {
+    db.prepare(`UPDATE settings SET currency_locked=1 WHERE currency IS NOT NULL AND TRIM(currency) != '' AND (currency_locked IS NULL OR currency_locked=0)`).run();
+  } catch (_) {}
 
   const { runSaasMigrations } = require('./saasPhase1Migrate');
   runSaasMigrations(db);
