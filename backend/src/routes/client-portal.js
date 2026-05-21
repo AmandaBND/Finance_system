@@ -17,6 +17,22 @@ const uploadSlip = multer({ storage: slipStorage, limits: { fileSize: 10 * 1024 
 
 router.use(clientAuth);
 
+router.get('/usage', (req, res) => {
+  try {
+    const { companyId } = req.client;
+    const company = db.prepare('SELECT plan FROM companies WHERE id=?').get(companyId);
+    const plan = company?.plan || 'free';
+    const invoicesThisMonth = db.prepare(`SELECT COUNT(*) as c FROM invoices WHERE company_id=? AND created_at >= datetime('now','start of month') AND created_at < datetime('now','start of month','+1 month')`).get(companyId).c;
+    const expensesThisMonth = db.prepare(`SELECT COUNT(*) as c FROM expenses WHERE company_id=? AND created_at >= datetime('now','start of month') AND created_at < datetime('now','start of month','+1 month')`).get(companyId).c;
+    const totalClients = db.prepare(`SELECT COUNT(*) as c FROM clients WHERE company_id=?`).get(companyId).c;
+    const totalUsers = db.prepare(`SELECT COUNT(*) as c FROM app_users WHERE company_id=?`).get(companyId).c;
+    const totalEmployees = db.prepare(`SELECT COUNT(*) as c FROM employees WHERE company_id=? AND status='Active'`).get(companyId).c;
+    res.json({ plan, invoicesThisMonth, expensesThisMonth, totalClients, totalUsers, totalEmployees });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 function clientInvoiceWhere(alias = 'i') {
   const p = alias ? `${alias}.` : '';
   return `(${p}client_id=? OR (${p}client_id IS NULL AND ${p}client_email=?)) AND ${p}company_id=?`;

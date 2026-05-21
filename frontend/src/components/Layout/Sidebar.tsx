@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, TrendingUp, FileText, Receipt,
   RefreshCw, BarChart3, Settings, Users, Wallet, LogOut,
-  FolderKanban, CheckSquare
+  FolderKanban, CheckSquare, CreditCard
 } from 'lucide-react'
 import { canAccessRole } from '../../lib/permissions'
 
@@ -17,6 +17,7 @@ const nav = [
   { to: '/app/projects', icon: FolderKanban, label: 'Projects', section: 'projects' as const },
   { to: '/app/tasks', icon: CheckSquare, label: 'Tasks', section: 'tasks' as const },
   { to: '/app/reports', icon: BarChart3, label: 'Reports', section: 'reports' as const },
+  { to: '/app/settings/billing', icon: CreditCard, label: 'Billing', section: 'settings' as const },
 ]
 
 export default function Sidebar() {

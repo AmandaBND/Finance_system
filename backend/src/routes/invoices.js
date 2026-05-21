@@ -4,6 +4,8 @@ const db = require('../database');
 const { format } = require('date-fns');
 const { generateInvoicePDF } = require('../services/pdfService');
 const { sendInvoiceEmail } = require('../services/emailService');
+const { enforceLimit } = require('../lib/enforceLimits');
+const { isCurrencyAllowed, normalizeCurrencyList, getAllowedCurrencies } = require('../lib/planLimits');
 
 function syncInvoiceRevenue(inv, companyId) {
   if (!inv || !inv.invoice_number || !companyId) return;
@@ -60,14 +62,35 @@ function syncInvoiceRevenue(inv, companyId) {
 function generateInvoiceNumber(companyId) {
   const settings = db.prepare('SELECT invoice_prefix FROM settings WHERE company_id=? LIMIT 1').get(companyId);
   const prefix = settings?.invoice_prefix || 'INV';
-  const count = db.prepare('SELECT COUNT(*) as c FROM invoices WHERE company_id=?').get(companyId).c + 1;
-  return `${prefix}-${String(count).padStart(4, '0')}-${format(new Date(), 'yyyy')}`;
+  const year = format(new Date(), 'yyyy');
+  let count = db.prepare("SELECT COUNT(*) as c FROM invoices WHERE company_id=? AND strftime('%Y', created_at)=?").get(companyId, year).c + 1;
+  let invoiceNumber = `${prefix}-${String(count).padStart(4, '0')}-${year}`;
+  let attempts = 0;
+
+  while (db.prepare('SELECT 1 FROM invoices WHERE invoice_number=?').get(invoiceNumber)) {
+    count += 1;
+    invoiceNumber = `${prefix}-${String(count).padStart(4, '0')}-${year}`;
+    attempts += 1;
+    if (attempts > 50) {
+      invoiceNumber = `${prefix}-${year}-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
+      break;
+    }
+  }
+
+  return invoiceNumber;
 }
 
 const CURRENCY_SYMBOLS = {
   LKR: 'Rs.', USD: '$', EUR: '€', GBP: '£',
   AUD: 'A$', SGD: 'S$', INR: '₹', CAD: 'C$', JPY: '¥'
 };
+
+function getAllowedCompanyCurrencies(cid, plan) {
+  const row = db.prepare('SELECT allowed_currencies FROM settings WHERE company_id=? LIMIT 1').get(cid) || {};
+  const selected = normalizeCurrencyList(row.allowed_currencies);
+  if (plan === 'enterprise') return selected.length ? selected : [];
+  return getAllowedCurrencies(plan, selected);
+}
 
 router.get('/', (req, res) => {
   try {
@@ -99,11 +122,19 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   try {
     const cid = req.companyId;
+    const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
+    const invoiceCount = db.prepare(`SELECT COUNT(*) as c FROM invoices WHERE company_id=? AND created_at >= datetime('now','start of month') AND created_at < datetime('now','start of month','+1 month')`).get(cid).c;
+    enforceLimit(plan, 'invoicesPerMonth', invoiceCount, 'Invoice');
+
     const {
       client_id, client_name, client_email, client_address, client_company,
       issue_date, due_date, items, tax_rate, discount, notes, terms, status,
       currency = 'LKR', payment_methods = 'bank'
     } = req.body;
+    const allowedCurrencies = getAllowedCompanyCurrencies(cid, plan);
+    if (!isCurrencyAllowed(plan, currency, allowedCurrencies)) {
+      return res.status(403).json({ error: `Currency ${currency} is not allowed on your ${plan} plan. Update allowed currencies in Settings or upgrade your plan.` });
+    }
     const invoice_number = generateInvoiceNumber(cid);
     const currency_symbol = CURRENCY_SYMBOLS[currency] || currency;
     const subtotal = items.reduce((s, i) => s + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0);
@@ -130,17 +161,25 @@ router.post('/', (req, res) => {
     if (newInvoice) syncInvoiceRevenue(newInvoice, cid);
 
     res.json({ id: invoiceId, invoice_number, message: 'Invoice created' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'PLAN_LIMIT_EXCEEDED') return res.status(403).json({ error: err.message, code: err.code, plan: err.plan, limit: err.limit, current: err.current });
+    if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Duplicate invoice number detected. Please try again.' });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.put('/:id', (req, res) => {
   try {
     const cid = req.companyId;
+    const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
     const {
       client_id, client_name, client_email, client_address, client_company,
       issue_date, due_date, items, tax_rate, discount, notes, terms, status, paid_date,
       currency = 'LKR', payment_methods = 'bank'
     } = req.body;
+    const allowedCurrencies = getAllowedCompanyCurrencies(cid, plan);
+    if (!isCurrencyAllowed(plan, currency, allowedCurrencies)) {
+      return res.status(403).json({ error: `Currency ${currency} is not allowed on your ${plan} plan. Update allowed currencies in Settings or upgrade your plan.` });
+    }
     const currency_symbol = CURRENCY_SYMBOLS[currency] || currency;
     const subtotal = items.reduce((s, i) => s + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0);
     const tax_amount = (subtotal * (parseFloat(tax_rate) || 0)) / 100;
@@ -168,7 +207,10 @@ router.put('/:id', (req, res) => {
     if (updatedInvoice) syncInvoiceRevenue(updatedInvoice, cid);
 
     res.json({ message: 'Updated' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'PLAN_LIMIT_EXCEEDED') return res.status(403).json({ error: err.message, code: err.code, plan: err.plan, limit: err.limit, current: err.current });
+    if (err.message && err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Duplicate invoice number detected. Please try again.' });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.delete('/:id', (req, res) => {

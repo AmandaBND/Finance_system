@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { invoiceApi, clientApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
+import { useCompanySettings } from '../hooks/useSettings'
 import { Plus, Search, Send, CheckCircle, Download, Trash2, Edit2, X, Building2, CreditCard } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -7,10 +8,10 @@ import { format } from 'date-fns'
 const EMPTY_ITEM = { description: '', quantity: 1, unit_price: 0, amount: 0 }
 const STATUS_COLORS: any = { Draft: 'bg-slate-100 text-slate-600', Sent: 'bg-blue-100 text-blue-700', Paid: 'bg-emerald-100 text-emerald-700', Overdue: 'bg-red-100 text-red-700', Cancelled: 'bg-gray-100 text-gray-500' }
 
-function CurrencySelector({ value, onChange }: { value: string, onChange: (v: string) => void }) {
+function CurrencySelector({ value, onChange, options }: { value: string, onChange: (v: string) => void, options: string[] }) {
   return (
     <select className="input" value={value} onChange={e => onChange(e.target.value)}>
-      {SUPPORTED_CURRENCIES.map(c => (
+      {options.map(c => (
         <option key={c} value={c}>{c} — {CURRENCY_SYMBOLS[c]}</option>
       ))}
     </select>
@@ -18,6 +19,7 @@ function CurrencySelector({ value, onChange }: { value: string, onChange: (v: st
 }
 
 export default function Invoices() {
+  const { allowedCurrencies, defaultCurrency } = useCompanySettings()
   const [invoices, setInvoices] = useState<any[]>([])
   const [clients, setClients] = useState<any[]>([])
   const [search, setSearch] = useState('')
@@ -30,7 +32,7 @@ export default function Invoices() {
     issue_date: format(new Date(), 'yyyy-MM-dd'),
     due_date: format(new Date(Date.now() + 30 * 86400000), 'yyyy-MM-dd'),
     items: [{ ...EMPTY_ITEM }], tax_rate: 0, discount: 0, notes: '', terms: '', status: 'Draft',
-    currency: 'LKR', payment_methods: 'bank'
+    currency: defaultCurrency || 'USD', payment_methods: 'bank'
   })
 
   useEffect(() => { load() }, [filterStatus, search])
@@ -43,7 +45,7 @@ export default function Invoices() {
 
   function openNew() {
     setEditing(null)
-    setForm({ client_name: '', client_email: '', client_address: '', client_company: '', issue_date: format(new Date(), 'yyyy-MM-dd'), due_date: format(new Date(Date.now() + 30 * 86400000), 'yyyy-MM-dd'), items: [{ ...EMPTY_ITEM }], tax_rate: 0, discount: 0, notes: '', terms: '', status: 'Draft', currency: 'LKR', payment_methods: 'bank' })
+    setForm({ client_name: '', client_email: '', client_address: '', client_company: '', issue_date: format(new Date(), 'yyyy-MM-dd'), due_date: format(new Date(Date.now() + 30 * 86400000), 'yyyy-MM-dd'), items: [{ ...EMPTY_ITEM }], tax_rate: 0, discount: 0, notes: '', terms: '', status: 'Draft', currency: defaultCurrency || 'USD', payment_methods: 'bank' })
     setModal(true)
   }
 
@@ -219,7 +221,7 @@ export default function Invoices() {
                 <div><label className="label">Address</label><input className="input" value={form.client_address} onChange={e => setForm({...form, client_address: e.target.value})} /></div>
                 <div><label className="label">Issue Date</label><input className="input" type="date" value={form.issue_date} onChange={e => setForm({...form, issue_date: e.target.value})} /></div>
                 <div><label className="label">Due Date</label><input className="input" type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} /></div>
-                <div><label className="label">Currency</label><CurrencySelector value={form.currency || 'LKR'} onChange={v => setForm({...form, currency: v})} /></div>
+                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v})} /></div>
               </div>
 
               {/* Items */}

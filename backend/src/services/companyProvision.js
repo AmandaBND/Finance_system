@@ -44,8 +44,8 @@ function provisionNewCompany(db, { companyName, ownerEmail, ownerName, passwordH
       db.prepare(`INSERT INTO settings (${cols.join(',')}) VALUES (${placeholders})`).run(...vals);
     } else {
       db.prepare(`
-        INSERT INTO settings (company_name, company_email, currency, currency_symbol, company_id)
-        VALUES (?, ?, 'LKR', 'Rs.', ?)
+        INSERT INTO settings (company_name, company_email, currency, currency_symbol, allowed_currencies, company_id)
+        VALUES (?, ?, 'USD', '$', '["LKR","USD"]', ?)
       `).run(companyName, email, companyId);
     }
 

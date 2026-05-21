@@ -10,6 +10,7 @@ import Salaries from './pages/Salaries'
 import RecurringPayments from './pages/RecurringPayments'
 import Reports from './pages/Reports'
 import Settings from './pages/Settings'
+import Billing from './pages/Billing'
 import Clients from './pages/Clients'
 import CompanyLogin from './pages/CompanyLogin'
 import Landing from './pages/Landing'
@@ -19,6 +20,7 @@ import Unauthorized from './pages/Unauthorized'
 import PortalLogin from './pages/PortalLogin'
 import PortalLayout from './components/PortalLayout/PortalLayout'
 import PortalDashboard from './pages/portal/PortalDashboard'
+import PortalUsage from './pages/portal/PortalUsage'
 import PortalInvoices from './pages/portal/PortalInvoices'
 import PortalPay from './pages/portal/PortalPay'
 import PortalHistory from './pages/portal/PortalHistory'
@@ -145,6 +147,7 @@ export default function App() {
         <Route path="/tasks" element={<LegacyAppRedirect to="/app/tasks" />} />
         <Route path="/reports" element={<LegacyAppRedirect to="/app/reports" />} />
         <Route path="/settings" element={<LegacyAppRedirect to="/app/settings" passState />} />
+        <Route path="/settings/billing" element={<LegacyAppRedirect to="/app/settings/billing" passState />} />
 
         <Route path="/app" element={<AdminGuard><AdminAppGate /></AdminGuard>}>
           <Route index element={<Navigate to="/app/dashboard" replace />} />
@@ -159,12 +162,14 @@ export default function App() {
           <Route path="tasks" element={<Tasks />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="settings/billing" element={<Billing />} />
         </Route>
 
         <Route path="/portal/login" element={<PortalLogin />} />
         <Route path="/portal" element={<PortalGuard><PortalLayout /></PortalGuard>}>
           <Route index element={<Navigate to="/portal/dashboard" replace />} />
           <Route path="dashboard" element={<PortalDashboard />} />
+          <Route path="usage" element={<PortalUsage />} />
           <Route path="invoices" element={<PortalInvoices />} />
           <Route path="pay/:invoiceId" element={<PortalPay />} />
           <Route path="history" element={<PortalHistory />} />

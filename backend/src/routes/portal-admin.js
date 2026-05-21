@@ -2,10 +2,21 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../database');
+const { getLimits } = require('../lib/planLimits');
+
+function requireClientPortalFeature(cid) {
+  const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
+  if (!getLimits(plan).clientPortal) {
+    const err = new Error('Client portal is not available on this plan.');
+    err.code = 'FEATURE_NOT_AVAILABLE';
+    throw err;
+  }
+}
 
 router.get('/credentials', (req, res) => {
   try {
     const cid = req.companyId;
+    requireClientPortalFeature(cid);
     const rows = db.prepare(`
       SELECT cc.id, cc.client_id, cc.username, cc.is_active, cc.last_login, cc.created_at,
              c.name as client_name, c.email as client_email, c.company as client_company
@@ -15,12 +26,15 @@ router.get('/credentials', (req, res) => {
       ORDER BY cc.created_at DESC
     `).all(cid);
     res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.post('/credentials', (req, res) => {
   try {
     const cid = req.companyId;
+    requireClientPortalFeature(cid);
     const { client_id, username, password } = req.body;
     if (!client_id || !username || !password) return res.status(400).json({ error: 'client_id, username, and password are required' });
 
@@ -42,12 +56,15 @@ router.post('/credentials', (req, res) => {
     );
 
     res.json({ id: result.lastInsertRowid, message: 'Portal access created' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.put('/credentials/:id', (req, res) => {
   try {
     const cid = req.companyId;
+    requireClientPortalFeature(cid);
     const { password, is_active } = req.body;
     const cred = db.prepare('SELECT cc.* FROM client_credentials cc WHERE cc.id=? AND cc.company_id=?').get(req.params.id, cid);
     if (!cred) return res.status(404).json({ error: 'Credential not found' });
@@ -60,20 +77,27 @@ router.put('/credentials/:id', (req, res) => {
       db.prepare(`UPDATE client_credentials SET is_active=? WHERE id=? AND company_id=?`).run(is_active ? 1 : 0, req.params.id, cid);
     }
     res.json({ message: 'Updated' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.delete('/credentials/:id', (req, res) => {
   try {
-    const r = db.prepare('DELETE FROM client_credentials WHERE id=? AND company_id=?').run(req.params.id, req.companyId);
+    const cid = req.companyId;
+    requireClientPortalFeature(cid);
+    const r = db.prepare('DELETE FROM client_credentials WHERE id=? AND company_id=?').run(req.params.id, cid);
     if (!r.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ message: 'Portal access revoked' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.get('/clients-without-access', (req, res) => {
   try {
     const cid = req.companyId;
+    requireClientPortalFeature(cid);
     const rows = db.prepare(`
       SELECT c.id, c.name, c.email, c.company
       FROM clients c
@@ -81,24 +105,30 @@ router.get('/clients-without-access', (req, res) => {
       ORDER BY c.name ASC
     `).all(cid, cid);
     res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.get('/payment-slips', (req, res) => {
   try {
     const cid = req.companyId;
+    requireClientPortalFeature(cid);
     const { status } = req.query;
     let query = `SELECT ps.*, i.total as invoice_total, i.currency_symbol FROM payment_slips ps LEFT JOIN invoices i ON i.id = ps.invoice_id AND i.company_id=ps.company_id WHERE ps.company_id=?`;
     const params = [cid];
     if (status) { query += ' AND ps.status=?'; params.push(status); }
     query += ' ORDER BY ps.submitted_at DESC';
     res.json(db.prepare(query).all(...params));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.put('/payment-slips/:id', (req, res) => {
   try {
     const cid = req.companyId;
+    requireClientPortalFeature(cid);
     const { action, admin_notes } = req.body;
     const slip = db.prepare('SELECT * FROM payment_slips WHERE id=? AND company_id=?').get(req.params.id, cid);
     if (!slip) return res.status(404).json({ error: 'Slip not found' });
@@ -131,19 +161,26 @@ router.put('/payment-slips/:id', (req, res) => {
     }
 
     res.json({ message: `Slip ${newStatus.toLowerCase()}` });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.get('/gateway', (req, res) => {
   try {
-    const gw = db.prepare('SELECT * FROM payment_gateway_settings WHERE company_id=? LIMIT 1').get(req.companyId);
+    const cid = req.companyId;
+    requireClientPortalFeature(cid);
+    const gw = db.prepare('SELECT * FROM payment_gateway_settings WHERE company_id=? LIMIT 1').get(cid);
     res.json(gw || {});
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.put('/gateway', (req, res) => {
   try {
     const cid = req.companyId;
+    requireClientPortalFeature(cid);
     const { payhere_merchant_id, payhere_secret, payhere_mode, bank_account_no, bank_account_name, bank_name, bank_swift, bank_branch, enabled_gateways } = req.body;
     const r = db.prepare(`
       UPDATE payment_gateway_settings SET
@@ -160,14 +197,20 @@ router.put('/gateway', (req, res) => {
     );
     if (!r.changes) return res.status(404).json({ error: 'Gateway row not found' });
     res.json({ message: 'Payment gateway settings updated' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.get('/online-payments', (req, res) => {
   try {
-    const rows = db.prepare(`SELECT * FROM online_payments WHERE company_id=? ORDER BY created_at DESC LIMIT 100`).all(req.companyId);
+    const cid = req.companyId;
+    requireClientPortalFeature(cid);
+    const rows = db.prepare(`SELECT * FROM online_payments WHERE company_id=? ORDER BY created_at DESC LIMIT 100`).all(cid);
     res.json(rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

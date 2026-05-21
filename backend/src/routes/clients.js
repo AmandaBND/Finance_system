@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+const { enforceLimit } = require('../lib/enforceLimits');
 
 router.get('/', (req, res) => {
   try {
@@ -10,10 +11,18 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   try {
+    const cid = req.companyId;
+    const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
+    const clientCount = db.prepare('SELECT COUNT(*) as c FROM clients WHERE company_id=?').get(cid).c;
+    enforceLimit(plan, 'clients', clientCount, 'Client');
+
     const { name, email, phone, company, address, country, notes } = req.body;
-    const result = db.prepare(`INSERT INTO clients (name, email, phone, company, address, country, notes, company_id) VALUES (?,?,?,?,?,?,?,?)`).run(name, email, phone, company, address, country || 'Sri Lanka', notes, req.companyId);
+    const result = db.prepare(`INSERT INTO clients (name, email, phone, company, address, country, notes, company_id) VALUES (?,?,?,?,?,?,?,?)`).run(name, email, phone, company, address, country || 'Sri Lanka', notes, cid);
     res.json({ id: result.lastInsertRowid, message: 'Client added' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'PLAN_LIMIT_EXCEEDED') return res.status(403).json({ error: err.message, code: err.code, plan: err.plan, limit: err.limit, current: err.current });
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.put('/:id', (req, res) => {

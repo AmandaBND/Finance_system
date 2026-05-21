@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database');
 const { format, addMonths, addYears, addDays } = require('date-fns');
+const { isCurrencyAllowed, normalizeCurrencyList, getAllowedCurrencies } = require('../lib/planLimits');
 
 router.get('/', (req, res) => {
   try {
@@ -16,10 +17,22 @@ router.get('/', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+function getAllowedCompanyCurrencies(cid, plan) {
+  const row = db.prepare('SELECT allowed_currencies FROM settings WHERE company_id=? LIMIT 1').get(cid) || {};
+  const selected = normalizeCurrencyList(row.allowed_currencies);
+  if (plan === 'enterprise') return selected.length ? selected : [];
+  return getAllowedCurrencies(plan, selected);
+}
+
 router.post('/', (req, res) => {
   try {
     const cid = req.companyId;
+    const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
     const { name, type, category, billing_cycle, amount, currency, next_payment_date, auto_renewal, client_vendor, email, reminder_days, notes } = req.body;
+    const allowedCurrencies = getAllowedCompanyCurrencies(cid, plan);
+    if (!isCurrencyAllowed(plan, currency || 'LKR', allowedCurrencies)) {
+      return res.status(400).json({ error: `Currency ${currency || 'LKR'} is not allowed for your plan`, allowedCurrencies });
+    }
     const result = db.prepare(`
       INSERT INTO recurring_payments (name, type, category, billing_cycle, amount, currency, next_payment_date, auto_renewal, client_vendor, email, reminder_days, notes, company_id)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
@@ -31,7 +44,12 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const cid = req.companyId;
+    const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
     const { name, type, category, billing_cycle, amount, currency, next_payment_date, auto_renewal, status, client_vendor, email, reminder_days, notes } = req.body;
+    const allowedCurrencies = getAllowedCompanyCurrencies(cid, plan);
+    if (!isCurrencyAllowed(plan, currency || 'LKR', allowedCurrencies)) {
+      return res.status(400).json({ error: `Currency ${currency || 'LKR'} is not allowed for your plan`, allowedCurrencies });
+    }
     const r = db.prepare(`
       UPDATE recurring_payments SET name=?, type=?, category=?, billing_cycle=?, amount=?, currency=?, next_payment_date=?, auto_renewal=?, status=?, client_vendor=?, email=?, reminder_days=?, notes=?, updated_at=CURRENT_TIMESTAMP
       WHERE id=? AND company_id=?

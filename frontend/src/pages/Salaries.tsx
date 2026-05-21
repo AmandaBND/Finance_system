@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { salaryApi, employeeApi, employeeAdminApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
+import { useCompanySettings } from '../hooks/useSettings'
 import { Plus, Edit2, Trash2, X, Send, Download, CheckCircle, Users2, Zap, Briefcase } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -8,10 +9,10 @@ import { format } from 'date-fns'
 const STATUS_COLORS: any = { Paid: 'bg-emerald-100 text-emerald-700', Pending: 'bg-amber-100 text-amber-700' }
 const EMPTY = { employee_id: '', employee_name: '', position: '', department: '', salary_type: 'Monthly', base_salary: '', bonuses: 0, deductions: 0, payment_month: format(new Date(), 'yyyy-MM'), payment_date: '', payment_method: 'Bank Transfer', notes: '', currency: 'LKR' }
 
-function CurrencySelector({ value, onChange }: { value: string, onChange: (v: string) => void }) {
+function CurrencySelector({ value, onChange, options }: { value: string, onChange: (v: string) => void, options: string[] }) {
   return (
     <select className="input" value={value} onChange={e => onChange(e.target.value)}>
-      {SUPPORTED_CURRENCIES.map(c => (
+      {options.map(c => (
         <option key={c} value={c}>{c} — {CURRENCY_SYMBOLS[c]}</option>
       ))}
     </select>
@@ -20,6 +21,7 @@ function CurrencySelector({ value, onChange }: { value: string, onChange: (v: st
 
 export default function Salaries() {
   const navigate = useNavigate()
+  const { allowedCurrencies, defaultCurrency } = useCompanySettings()
   const [records, setRecords] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
   const [empCredMap, setEmpCredMap] = useState<Record<number, any>>({})
@@ -28,7 +30,7 @@ export default function Salaries() {
   const [modal, setModal] = useState(false)
   const [empModal, setEmpModal] = useState(false)
   const [editing, setEditing] = useState<any>(null)
-  const [form, setForm] = useState<any>(EMPTY)
+  const [form, setForm] = useState<any>({ ...EMPTY, currency: defaultCurrency || 'USD' })
   const [empForm, setEmpForm] = useState<any>({ name: '', position: '', department: '', email: '', phone: '', salary_type: 'Monthly', base_salary: '', start_date: '', birthday: '' })
 
   useEffect(() => { load() }, [filterMonth])
@@ -51,8 +53,8 @@ export default function Salaries() {
     if (emp) setForm((f: any) => ({ ...f, employee_id: emp.id, employee_name: emp.name, position: emp.position || '', department: emp.department || '', salary_type: emp.salary_type || 'Monthly', base_salary: emp.base_salary || 0 }))
   }
 
-  function openNew() { setEditing(null); setForm(EMPTY); setModal(true) }
-  function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || 'LKR' }); setModal(true) }
+  function openNew() { setEditing(null); setForm({ ...EMPTY, currency: defaultCurrency || 'USD' }); setModal(true) }
+  function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || defaultCurrency || 'USD' }); setModal(true) }
 
   async function save() {
     try {
@@ -263,7 +265,7 @@ export default function Salaries() {
                 <div><label className="label">Position</label><input className="input" value={form.position} onChange={e => setForm({...form, position: e.target.value})} /></div>
                 <div><label className="label">Department</label><input className="input" value={form.department} onChange={e => setForm({...form, department: e.target.value})} /></div>
                 <div><label className="label">Payment Month</label><input className="input" type="month" value={form.payment_month} onChange={e => setForm({...form, payment_month: e.target.value})} /></div>
-                <div><label className="label">Currency</label><CurrencySelector value={form.currency || 'LKR'} onChange={v => setForm({...form, currency: v})} /></div>
+                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v})} /></div>
                 <div><label className="label">Basic Salary ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'})</label><input className="input" type="number" value={form.base_salary} onChange={e => setForm({...form, base_salary: e.target.value})} /></div>
                 <div><label className="label">Bonuses ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'})</label><input className="input" type="number" value={form.bonuses} onChange={e => setForm({...form, bonuses: e.target.value})} /></div>
                 <div><label className="label">Deductions ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'})</label><input className="input" type="number" value={form.deductions} onChange={e => setForm({...form, deductions: e.target.value})} /></div>

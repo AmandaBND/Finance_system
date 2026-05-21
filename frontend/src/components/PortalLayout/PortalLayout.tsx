@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FileText, CreditCard, History, LogOut, Menu, X, ChevronRight } from 'lucide-react'
+import { LayoutDashboard, FileText, CreditCard, History, LogOut, Menu, X, ChevronRight, BarChart3 } from 'lucide-react'
 
 const NAV = [
   { to: '/portal/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/portal/usage', icon: BarChart3, label: 'Usage' },
   { to: '/portal/invoices', icon: FileText, label: 'Invoices' },
   { to: '/portal/history', icon: History, label: 'Payment History' },
 ]

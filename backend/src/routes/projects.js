@@ -1,22 +1,37 @@
 const express = require('express');
 const router  = express.Router();
 const db      = require('../database');
+const { getLimits } = require('../lib/planLimits');
+
+function requireProjectsFeature(cid) {
+  const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
+  if (!getLimits(plan).projects) {
+    const err = new Error('Projects are not available on your current plan.');
+    err.code = 'FEATURE_NOT_AVAILABLE';
+    throw err;
+  }
+}
 
 router.get('/types', (req, res) => {
   try {
+    requireProjectsFeature(req.companyId);
     const types = db.prepare('SELECT * FROM project_types WHERE company_id=? ORDER BY name').all(req.companyId);
     res.json(types);
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.post('/types', (req, res) => {
   try {
     const cid = req.companyId;
+    requireProjectsFeature(cid);
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Type name required' });
     const r = db.prepare('INSERT INTO project_types (name, company_id) VALUES (?,?)').run(name.trim(), cid);
     res.json({ id: r.lastInsertRowid, name: name.trim() });
   } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
     if (err.message.includes('UNIQUE')) return res.status(400).json({ error: 'Type already exists' });
     res.status(500).json({ error: err.message });
   }
@@ -24,10 +39,13 @@ router.post('/types', (req, res) => {
 
 router.delete('/types/:id', (req, res) => {
   try {
+    requireProjectsFeature(req.companyId);
     const r = db.prepare('DELETE FROM project_types WHERE id=? AND company_id=?').run(req.params.id, req.companyId);
     if (!r.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.get('/stats', (req, res) => {
@@ -49,6 +67,7 @@ router.get('/stats', (req, res) => {
 
 router.get('/', (req, res) => {
   try {
+    requireProjectsFeature(req.companyId);
     const cid = req.companyId;
     const { status, search } = req.query;
     let sql = `
@@ -72,6 +91,7 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   try {
     const cid = req.companyId;
+    requireProjectsFeature(cid);
     const { name, client_id, client_name, start_date, status, type_ids, description } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Project name required' });
 
@@ -97,6 +117,7 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const cid = req.companyId;
+    requireProjectsFeature(cid);
     const { name, client_id, client_name, start_date, status, type_ids, description } = req.body;
 
     let resolvedClientName = client_name || '';
@@ -124,6 +145,7 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   try {
     const cid = req.companyId;
+    requireProjectsFeature(cid);
     const tasks = db.prepare('SELECT id FROM tasks WHERE project_id=? AND company_id=?').all(req.params.id, cid);
     tasks.forEach(t => {
       db.prepare('DELETE FROM task_resources WHERE task_id=? AND company_id=?').run(t.id, cid);
@@ -132,7 +154,9 @@ router.delete('/:id', (req, res) => {
     const r = db.prepare('DELETE FROM projects WHERE id=? AND company_id=?').run(req.params.id, cid);
     if (!r.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'FEATURE_NOT_AVAILABLE') return res.status(403).json({ error: err.message, code: err.code });
+    res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

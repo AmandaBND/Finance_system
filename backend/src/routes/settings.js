@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+const { validateAllowedCurrencies, normalizeCurrencyList, getAllowedCurrencies } = require('../lib/planLimits');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -11,26 +12,57 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
+function parseAllowedCurrencies(value, plan = 'free') {
+  const parsed = normalizeCurrencyList(value)
+  if (parsed.length) return parsed
+  return getAllowedCurrencies(plan, [])
+}
+
+function getCompanyPlan(companyId) {
+  return db.prepare('SELECT plan FROM companies WHERE id=?').get(companyId)?.plan || 'free'
+}
+
 router.get('/', (req, res) => {
   try {
+    const plan = getCompanyPlan(req.companyId)
     const settings = db.prepare('SELECT * FROM settings WHERE company_id=? LIMIT 1').get(req.companyId);
-    if (settings) delete settings.smtp_pass;
+    if (settings) {
+      delete settings.smtp_pass;
+      settings.plan = plan
+      settings.allowed_currencies = parseAllowedCurrencies(settings.allowed_currencies, plan)
+    }
     res.json(settings || {});
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.get('/full', (req, res) => {
   try {
-    res.json(db.prepare('SELECT * FROM settings WHERE company_id=? LIMIT 1').get(req.companyId) || {});
+    const plan = getCompanyPlan(req.companyId)
+    const settings = db.prepare('SELECT * FROM settings WHERE company_id=? LIMIT 1').get(req.companyId) || {};
+    if (settings) {
+      settings.plan = plan
+      settings.allowed_currencies = parseAllowedCurrencies(settings.allowed_currencies, plan)
+    }
+    res.json(settings);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.put('/', (req, res) => {
   try {
     const cid = req.companyId;
-    const fields = ['company_name', 'company_email', 'company_phone', 'company_address', 'company_website', 'currency', 'currency_symbol', 'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'openai_key', 'invoice_prefix', 'salary_prefix', 'invoice_terms', 'invoice_notes', 'auto_send_invoices', 'auto_send_reminders', 'reminder_days_before', 'overdue_check_enabled'];
+    const plan = getCompanyPlan(cid)
+    const fields = ['company_name', 'company_email', 'company_phone', 'company_address', 'company_website', 'currency', 'currency_symbol', 'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'openai_key', 'invoice_prefix', 'salary_prefix', 'invoice_terms', 'invoice_notes', 'auto_send_invoices', 'auto_send_reminders', 'reminder_days_before', 'overdue_check_enabled', 'allowed_currencies'];
     const updates = [];
     const values = [];
+
+    if (req.body.allowed_currencies !== undefined) {
+      const validation = validateAllowedCurrencies(plan, req.body.allowed_currencies)
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error })
+      }
+      req.body.allowed_currencies = JSON.stringify(validation.allowed)
+    }
+
     fields.forEach(f => {
       if (req.body[f] !== undefined) {
         updates.push(`${f}=?`);

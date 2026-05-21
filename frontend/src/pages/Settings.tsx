@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { settingsApi, portalAdminApi, employeeAdminApi, employeeApi, authApi } from '../services/api'
+import { settingsApi, portalAdminApi, employeeAdminApi, employeeApi, authApi, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { Save, Upload, Mail, Building2, Receipt, Bell, Users, CreditCard, Plus, Trash2, ToggleLeft, ToggleRight, RefreshCw, Eye, EyeOff, CheckCircle, XCircle, Clock, ExternalLink, Briefcase, CalendarCheck, BarChart3 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -63,11 +63,27 @@ export default function Settings() {
     if (tab === 'employee') loadEmployee()
   }, [tab])
 
+  const BASE_CURRENCIES = ['LKR', 'USD']
+  const PLAN_CURRENCY_LIMITS: Record<string, number> = { free: 2, professional: 5, business: 7, enterprise: Infinity }
+
+  function parseCurrencies(value: any) {
+    if (Array.isArray(value)) return value.filter((c: any) => typeof c === 'string' && SUPPORTED_CURRENCIES.includes(c))
+    if (typeof value === 'string') {
+      try { return JSON.parse(value).filter((c: any) => typeof c === 'string' && SUPPORTED_CURRENCIES.includes(c)) } catch { return [] }
+    }
+    return []
+  }
+
   async function load() {
     try {
       const r = await settingsApi.get()
-      setForm(r.data || {})
-      if (r.data?.logo_path) setLogoPreview(r.data.logo_path)
+      const settings = r.data || {}
+      settings.allowed_currencies = parseCurrencies(settings.allowed_currencies)
+      settings.currency = (settings.currency || 'USD').toUpperCase()
+      settings.currency_symbol = settings.currency_symbol || CURRENCY_SYMBOLS[settings.currency] || '$'
+      if (!settings.allowed_currencies.length) settings.allowed_currencies = BASE_CURRENCIES
+      setForm(settings)
+      if (settings.logo_path) setLogoPreview(settings.logo_path)
     } catch {} finally { setLoading(false) }
   }
 
@@ -297,6 +313,48 @@ export default function Settings() {
   const f = (key: string) => form[key] || ''
   const set = (key: string, val: any) => setForm((p: any) => ({ ...p, [key]: val }))
 
+  const selectedCurrencies: string[] = (() => {
+    const value = form.allowed_currencies
+    const parsed = Array.isArray(value)
+      ? value.filter((c: string) => typeof c === 'string' && SUPPORTED_CURRENCIES.includes(c))
+      : typeof value === 'string'
+        ? (() => { try { return JSON.parse(value).filter((c: string) => typeof c === 'string' && SUPPORTED_CURRENCIES.includes(c)) } catch { return [] } })()
+        : []
+    return Array.from(new Set([...BASE_CURRENCIES, ...parsed]))
+  })()
+
+  const plan = (form.plan || 'free').toLowerCase()
+  const planLimit = PLAN_CURRENCY_LIMITS[plan] ?? PLAN_CURRENCY_LIMITS.free
+  const additionalCurrencyLimit = Math.max(0, planLimit - BASE_CURRENCIES.length)
+  const additionalSelectedCount = selectedCurrencies.filter(c => !BASE_CURRENCIES.includes(c)).length
+  const canSelectMore = plan === 'enterprise' || additionalSelectedCount < additionalCurrencyLimit
+
+  const allowedCurrencyNote = plan === 'enterprise'
+    ? 'Enterprise allows all supported currencies.'
+    : plan === 'business'
+      ? 'Business includes LKR and USD plus up to 5 extra currencies.'
+      : plan === 'professional'
+        ? 'Professional includes LKR and USD plus up to 3 extra currencies.'
+        : 'Free includes only LKR and USD.'
+
+  function toggleAllowedCurrency(currency: string) {
+    if (plan === 'enterprise') return
+    if (BASE_CURRENCIES.includes(currency)) return
+
+    const setCurrencies = new Set(selectedCurrencies)
+    if (setCurrencies.has(currency)) setCurrencies.delete(currency)
+    else if (canSelectMore) setCurrencies.add(currency)
+    set('allowed_currencies', Array.from(new Set([...BASE_CURRENCIES, ...setCurrencies])))
+  }
+
+  function updateCurrencySelection(currency: string) {
+    const previousSymbol = f('currency_symbol')
+    const newSymbol = CURRENCY_SYMBOLS[currency] || currency
+    const resetSymbol = !previousSymbol || previousSymbol === CURRENCY_SYMBOLS[f('currency')] || previousSymbol === CURRENCY_SYMBOLS[currency]
+    set('currency', currency)
+    if (resetSymbol) set('currency_symbol', newSymbol)
+  }
+
   const gw = (key: string) => gateway[key] ?? ''
   const setGw = (key: string, val: any) => setGateway((p: any) => ({ ...p, [key]: val }))
 
@@ -364,12 +422,32 @@ export default function Settings() {
             <div><label className="label">Phone</label><input className="input" value={f('company_phone')} onChange={e => set('company_phone', e.target.value)} /></div>
             <div><label className="label">Website</label><input className="input" value={f('company_website')} onChange={e => set('company_website', e.target.value)} /></div>
             <div className="form-full"><label className="label">Address</label><textarea className="input h-20 resize-none" value={f('company_address')} onChange={e => set('company_address', e.target.value)} /></div>
+            <div className="form-full"><label className="label">Allowed Currencies</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {SUPPORTED_CURRENCIES.map(currency => {
+                  const active = selectedCurrencies.includes(currency)
+                  const baseCurrency = BASE_CURRENCIES.includes(currency)
+                  const disabled = plan === 'enterprise' || baseCurrency || (!active && !canSelectMore)
+                  return (
+                    <button
+                      type="button"
+                      key={currency}
+                      onClick={() => !disabled && toggleAllowedCurrency(currency)}
+                      className={`rounded-lg border px-3 py-2 text-sm text-left transition ${active ? 'bg-primary text-white border-primary' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'} ${disabled ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-sm'}`}>
+                      <div className="font-medium">{currency}</div>
+                      <div className="text-xs text-slate-400">{CURRENCY_SYMBOLS[currency] || currency}</div>
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-slate-400 mt-2">{allowedCurrencyNote}</p>
+            </div>
             <div><label className="label">Currency</label>
-              <select className="input" value={f('currency')} onChange={e => set('currency', e.target.value)}>
-                {['LKR','USD','EUR','GBP','AUD','SGD'].map(c => <option key={c}>{c}</option>)}
+              <select className="input" value={f('currency') || 'USD'} onChange={e => updateCurrencySelection(e.target.value)}>
+                {selectedCurrencies.map(c => <option key={c} value={c}>{c} — {CURRENCY_SYMBOLS[c]}</option>)}
               </select>
             </div>
-            <div><label className="label">Currency Symbol</label><input className="input" value={f('currency_symbol')} onChange={e => set('currency_symbol', e.target.value)} placeholder="Rs." /></div>
+            <div><label className="label">Currency Symbol</label><input className="input" value={f('currency_symbol')} onChange={e => set('currency_symbol', e.target.value)} placeholder="$" /></div>
           </div>
         </div>
 

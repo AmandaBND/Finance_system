@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { expenseApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
+import { useCompanySettings } from '../hooks/useSettings'
 import { Plus, Search, Edit2, Trash2, X, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -7,10 +8,10 @@ import { format } from 'date-fns'
 const CATEGORIES = ['Salaries','Freelancers','Software Tools','Marketing & Ads','Office Expenses','Internet','Equipment','Taxes','Subscriptions','Travel','Content Production','AI Tools','Hosting','Miscellaneous']
 const EMPTY = { title: '', category: '', vendor: '', amount: '', payment_date: format(new Date(), 'yyyy-MM-dd'), payment_method: '', is_recurring: 0, billing_cycle: '', notes: '', currency: 'LKR' }
 
-function CurrencySelector({ value, onChange }: { value: string, onChange: (v: string) => void }) {
+function CurrencySelector({ value, onChange, options }: { value: string, onChange: (v: string) => void, options: string[] }) {
   return (
     <select className="input" value={value} onChange={e => onChange(e.target.value)}>
-      {SUPPORTED_CURRENCIES.map(c => (
+      {options.map(c => (
         <option key={c} value={c}>{c} — {CURRENCY_SYMBOLS[c]}</option>
       ))}
     </select>
@@ -18,12 +19,13 @@ function CurrencySelector({ value, onChange }: { value: string, onChange: (v: st
 }
 
 export default function Expenses() {
+  const { allowedCurrencies, defaultCurrency } = useCompanySettings()
   const [records, setRecords] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('')
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState<any>(null)
-  const [form, setForm] = useState<any>(EMPTY)
+  const [form, setForm] = useState<any>({ ...EMPTY, currency: defaultCurrency || 'USD' })
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
 
   useEffect(() => { load() }, [filterCat, search])
@@ -33,8 +35,8 @@ export default function Expenses() {
     setRecords(r.data)
   }
 
-  function openNew() { setEditing(null); setForm(EMPTY); setReceiptFile(null); setModal(true) }
-  function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || 'LKR' }); setReceiptFile(null); setModal(true) }
+  function openNew() { setEditing(null); setForm({ ...EMPTY, currency: defaultCurrency || 'USD' }); setReceiptFile(null); setModal(true) }
+  function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || defaultCurrency || 'USD' }); setReceiptFile(null); setModal(true) }
 
   async function save() {
     try {
@@ -139,7 +141,7 @@ export default function Expenses() {
                   </select>
                 </div>
                 <div><label className="label">Vendor</label><input className="input" value={form.vendor} onChange={e => setForm({...form, vendor: e.target.value})} /></div>
-                <div><label className="label">Currency</label><CurrencySelector value={form.currency || 'LKR'} onChange={v => setForm({...form, currency: v})} /></div>
+                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v})} /></div>
                 <div><label className="label">Amount ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'}) *</label><input className="input" type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} /></div>
                 <div><label className="label">Payment Date</label><input className="input" type="date" value={form.payment_date} onChange={e => setForm({...form, payment_date: e.target.value})} /></div>
                 <div><label className="label">Payment Method</label>

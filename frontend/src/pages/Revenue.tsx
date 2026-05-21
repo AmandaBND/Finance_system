@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { revenueApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
+import { useCompanySettings } from '../hooks/useSettings'
 import { Plus, Search, Edit2, Trash2, X, TrendingUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
@@ -7,10 +8,10 @@ import { format } from 'date-fns'
 const STATUS_COLORS: any = { Paid: 'bg-emerald-100 text-emerald-700', Pending: 'bg-amber-100 text-amber-700', Overdue: 'bg-red-100 text-red-700' }
 const EMPTY = { client_name: '', project_name: '', service_type: '', invoice_number: '', invoice_date: format(new Date(), 'yyyy-MM-dd'), due_date: '', amount: '', payment_status: 'Pending', payment_method: '', is_recurring: 0, billing_cycle: 'One-time', notes: '', currency: 'LKR' }
 
-function CurrencySelector({ value, onChange }: { value: string, onChange: (v: string) => void }) {
+function CurrencySelector({ value, onChange, options }: { value: string, onChange: (v: string) => void, options: string[] }) {
   return (
     <select className="input" value={value} onChange={e => onChange(e.target.value)}>
-      {SUPPORTED_CURRENCIES.map(c => (
+      {options.map(c => (
         <option key={c} value={c}>{c} — {CURRENCY_SYMBOLS[c]}</option>
       ))}
     </select>
@@ -18,13 +19,14 @@ function CurrencySelector({ value, onChange }: { value: string, onChange: (v: st
 }
 
 export default function Revenue() {
+  const { allowedCurrencies, defaultCurrency } = useCompanySettings()
   const [records, setRecords] = useState<any[]>([])
   const [stats, setStats] = useState<any>({})
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [modal, setModal] = useState(false)
   const [editing, setEditing] = useState<any>(null)
-  const [form, setForm] = useState<any>(EMPTY)
+  const [form, setForm] = useState<any>({ ...EMPTY, currency: defaultCurrency || 'USD' })
 
   useEffect(() => { load() }, [filterStatus, search])
 
@@ -34,8 +36,8 @@ export default function Revenue() {
     setStats(s.data)
   }
 
-  function openNew() { setEditing(null); setForm(EMPTY); setModal(true) }
-  function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || 'LKR' }); setModal(true) }
+  function openNew() { setEditing(null); setForm({ ...EMPTY, currency: defaultCurrency || 'USD' }); setModal(true) }
+  function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || defaultCurrency || 'USD' }); setModal(true) }
 
   async function save() {
     try {
@@ -136,7 +138,7 @@ export default function Revenue() {
                 <div><label className="label">Invoice Number</label><input className="input" value={form.invoice_number} onChange={e => setForm({...form, invoice_number: e.target.value})} /></div>
                 <div><label className="label">Invoice Date</label><input className="input" type="date" value={form.invoice_date} onChange={e => setForm({...form, invoice_date: e.target.value})} /></div>
                 <div><label className="label">Due Date</label><input className="input" type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} /></div>
-                <div><label className="label">Currency</label><CurrencySelector value={form.currency || 'LKR'} onChange={v => setForm({...form, currency: v})} /></div>
+                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v})} /></div>
                 <div><label className="label">Amount ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'}) *</label><input className="input" type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} /></div>
                 <div><label className="label">Payment Status</label>
                   <select className="input" value={form.payment_status} onChange={e => setForm({...form, payment_status: e.target.value})}>

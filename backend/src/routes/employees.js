@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
+const { enforceLimit } = require('../lib/enforceLimits');
 
 router.get('/', (req, res) => {
   try {
@@ -10,10 +11,17 @@ router.get('/', (req, res) => {
 
 router.post('/', (req, res) => {
   try {
+    const cid = req.companyId;
+    const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
+    const employeeCount = db.prepare('SELECT COUNT(*) as c FROM employees WHERE company_id=? AND status="Active"').get(cid).c;
+    enforceLimit(plan, 'payrollEmployees', employeeCount, 'Payroll employee');
+
     const { name, position, department, email, phone, salary_type, base_salary, start_date, birthday, notes } = req.body;
-    const result = db.prepare(`INSERT INTO employees (name, position, department, email, phone, salary_type, base_salary, start_date, birthday, notes, company_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(name, position, department, email, phone, salary_type || 'Monthly', base_salary || 0, start_date, birthday || null, notes, req.companyId);
+    const result = db.prepare(`INSERT INTO employees (name, position, department, email, phone, salary_type, base_salary, start_date, birthday, notes, company_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(name, position, department, email, phone, salary_type || 'Monthly', base_salary || 0, start_date, birthday || null, notes, cid);
     res.json({ id: result.lastInsertRowid, message: 'Employee added' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    if (err.code === 'PLAN_LIMIT_EXCEEDED') return res.status(403).json({ error: err.message, code: err.code, plan: err.plan, limit: err.limit, current: err.current });
+    res.status(500).json({ error: err.message }); }
 });
 
 router.put('/:id', (req, res) => {

@@ -22,8 +22,9 @@ function initializeDatabase() {
       company_phone TEXT,
       company_address TEXT,
       company_website TEXT,
-      currency TEXT DEFAULT 'LKR',
-      currency_symbol TEXT DEFAULT 'Rs.',
+      currency TEXT DEFAULT 'USD',
+      currency_symbol TEXT DEFAULT '$',
+      allowed_currencies TEXT DEFAULT '["LKR","USD"]',
       logo_path TEXT,
       smtp_host TEXT DEFAULT 'smtp.hostinger.com',
       smtp_port INTEGER DEFAULT 465,
@@ -81,6 +82,7 @@ function initializeDatabase() {
 
     CREATE TABLE IF NOT EXISTS invoices (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id INTEGER NOT NULL DEFAULT 1,
       invoice_number TEXT UNIQUE NOT NULL,
       client_id INTEGER,
       client_name TEXT NOT NULL,
@@ -445,6 +447,7 @@ function initializeDatabase() {
     `ALTER TABLE salary_payments ADD COLUMN currency TEXT DEFAULT 'LKR'`,
     `ALTER TABLE settings ADD COLUMN admin_username TEXT DEFAULT 'admin'`,
     `ALTER TABLE settings ADD COLUMN admin_password_hash TEXT`,
+    `ALTER TABLE settings ADD COLUMN allowed_currencies TEXT DEFAULT '["LKR","USD"]'`,
     `ALTER TABLE employees ADD COLUMN birthday DATE`,
   ];
   migrations.forEach(sql => {

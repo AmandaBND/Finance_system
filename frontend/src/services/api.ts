@@ -122,6 +122,10 @@ export const clientApi = {
   delete: (id: number) => api.delete(`/clients/${id}`)
 }
 
+export const companyApi = {
+  usage: (companyId: string) => api.get(`/companies/${companyId}/usage`)
+}
+
 export const reportApi = {
   pl: (params?: any) => api.get('/reports/pl', { params }),
   revenue: (params?: any) => api.get('/reports/revenue', { params }),
@@ -175,6 +179,38 @@ export function formatByCurrency(amount: number, currency = 'LKR') {
   return `${symbol} ${Number(amount || 0).toLocaleString('en-LK', { minimumFractionDigits: 2 })}`
 }
 
+export function normalizeCurrencyList(value: any): string[] {
+  if (Array.isArray(value)) return [...new Set(value.filter((c: any) => typeof c === 'string' && SUPPORTED_CURRENCIES.includes(c)))]
+  if (typeof value === 'string') {
+    try { return normalizeCurrencyList(JSON.parse(value)) } catch { return [] }
+  }
+  return []
+}
+
+const PLAN_CURRENCY_LIMITS: Record<string, number> = {
+  free: 2,
+  professional: 5,
+  business: 7,
+  enterprise: Infinity
+}
+
+export function getAllowedCurrencyOptions(plan: string, selected: any): string[] {
+  const normalized = normalizeCurrencyList(selected)
+  if (plan === 'enterprise') return SUPPORTED_CURRENCIES
+  const allowed = ['LKR', 'USD']
+  for (const currency of normalized) {
+    if (!SUPPORTED_CURRENCIES.includes(currency)) continue
+    if (allowed.includes(currency)) continue
+    if (allowed.length >= PLAN_CURRENCY_LIMITS[plan]) break
+    allowed.push(currency)
+  }
+  return allowed
+}
+
+export function getDefaultCurrency(settings: any) {
+  return (settings?.currency || 'USD').toUpperCase()
+}
+
 // ── Portal API (client-facing, uses Bearer token) ─────────────────────────
 function getPortalToken() { return localStorage.getItem('portal_token') || '' }
 
@@ -199,6 +235,7 @@ export const portalAuthApi = {
 
 export const portalApi = {
   dashboard: () => portalAxios.get('/dashboard'),
+  usage: () => portalAxios.get('/usage'),
   invoices: (params?: any) => portalAxios.get('/invoices', { params }),
   invoice: (id: number) => portalAxios.get(`/invoices/${id}`),
   downloadPdf: (id: number) => portalAxios.get(`/invoices/${id}/pdf`, { responseType: 'blob' }),

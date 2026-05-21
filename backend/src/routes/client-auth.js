@@ -3,6 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../database');
+const { getLimits } = require('../lib/planLimits');
 const clientAuth = require('../middleware/clientAuth');
 
 const SECRET = process.env.JWT_SECRET || 'groovymark-portal-jwt-2026-secure';
@@ -22,6 +23,11 @@ router.post('/login', (req, res) => {
 
     if (!cred) return res.status(401).json({ error: 'Invalid username or password' });
     if (!cred.is_active) return res.status(403).json({ error: 'Account is disabled. Please contact support.' });
+
+    const company = db.prepare('SELECT plan FROM companies WHERE id=?').get(cred.tenantCompanyId);
+    if (!getLimits(company?.plan || 'free').clientPortal) {
+      return res.status(403).json({ error: 'Client portal is not enabled on this plan.' });
+    }
 
     const valid = bcrypt.compareSync(password, cred.password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid username or password' });
