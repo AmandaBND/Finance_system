@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database');
-const { validateAllowedCurrencies, normalizeCurrencyList, getAllowedCurrencies } = require('../lib/planLimits');
+const { validateAllowedCurrencies, normalizeCurrencyList, getAllowedCurrencies, SUPPORTED_CURRENCIES } = require('../lib/planLimits');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -11,6 +11,11 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, 'logo' + path.extname(file.originalname))
 });
 const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+
+const CURRENCY_SYMBOLS = {
+  LKR: 'Rs.', USD: '$', EUR: '€', GBP: '£',
+  AUD: 'A$', SGD: 'S$', INR: '₹', CAD: 'C$', JPY: '¥'
+};
 
 function parseAllowedCurrencies(value, plan = 'free') {
   const parsed = normalizeCurrencyList(value)
@@ -51,6 +56,13 @@ router.put('/', (req, res) => {
   try {
     const cid = req.companyId;
     const plan = getCompanyPlan(cid)
+    if (req.body.currency !== undefined) {
+      const currency = String(req.body.currency || 'USD').toUpperCase();
+      req.body.currency = SUPPORTED_CURRENCIES.includes(currency) ? currency : 'USD';
+      if (req.body.currency_symbol === undefined || req.body.currency_symbol === '') {
+        req.body.currency_symbol = CURRENCY_SYMBOLS[req.body.currency] || req.body.currency;
+      }
+    }
     const fields = ['company_name', 'company_email', 'company_phone', 'company_address', 'company_website', 'currency', 'currency_symbol', 'smtp_host', 'smtp_port', 'smtp_secure', 'smtp_user', 'smtp_pass', 'openai_key', 'invoice_prefix', 'salary_prefix', 'invoice_terms', 'invoice_notes', 'auto_send_invoices', 'auto_send_reminders', 'reminder_days_before', 'overdue_check_enabled', 'allowed_currencies'];
     const updates = [];
     const values = [];
