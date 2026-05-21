@@ -125,8 +125,8 @@ router.get('/', (req, res) => {
     }
     const burnRate = Math.round(burnTotal / 3);
 
-    const allRevR  = db.prepare(`SELECT amount, COALESCE(currency,'LKR') as currency FROM revenue WHERE company_id=? AND payment_status='Paid'`).all(cid);
-    const allExpR  = db.prepare(`SELECT amount, COALESCE(currency,'LKR') as currency FROM expenses WHERE company_id=?`).all(cid);
+    const allRevR  = db.prepare(`SELECT amount, amount_primary, COALESCE(currency,'LKR') as currency FROM revenue WHERE company_id=? AND payment_status='Paid'`).all(cid);
+    const allExpR  = db.prepare(`SELECT amount, amount_primary, COALESCE(currency,'LKR') as currency FROM expenses WHERE company_id=?`).all(cid);
     const cashBalance = Math.round(
       sumToCurrency(allRevR, 'amount', 'currency', targetCurrency, rates) -
       sumToCurrency(allExpR, 'amount', 'currency', targetCurrency, rates)

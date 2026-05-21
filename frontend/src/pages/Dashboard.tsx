@@ -48,11 +48,12 @@ function AIInsightCard({ insight }: any) {
 
 export default function Dashboard() {
   const { currencySymbol } = useCompanySettings()
-  const fmt = (n: number) => fmt(n, currencySymbol)
+  const fmt = (n: number) => formatCurrency(n, currencySymbol)
   const [data, setData] = useState<any>(null)
   const [ai, setAi] = useState<any>(null)
   const [loadingAi, setLoadingAi] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [birthdays, setBirthdays] = useState<any[]>([])
   const [wishTarget, setWishTarget] = useState<any>(null)
   const [wishMsg, setWishMsg] = useState('')
@@ -63,13 +64,17 @@ export default function Dashboard() {
   async function load() {
     try {
       setLoading(true)
+      setLoadError(null)
       const [dashRes, bdayRes] = await Promise.all([
         dashboardApi.get(),
         employeeAdminApi.upcomingBirthdays().catch(() => ({ data: [] })),
       ])
       setData(dashRes.data)
       setBirthdays(bdayRes.data || [])
-    } catch {} finally { setLoading(false) }
+    } catch (err: any) {
+      setLoadError(err.response?.data?.error || 'Failed to load dashboard. Restart the server if you recently updated the app.')
+      setData(null)
+    } finally { setLoading(false) }
     loadAi()
   }
 
@@ -113,6 +118,13 @@ export default function Dashboard() {
         <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
         <p className="text-slate-500 text-sm">Loading dashboard...</p>
       </div>
+    </div>
+  )
+
+  if (loadError) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4 text-center max-w-md mx-auto">
+      <p className="text-red-600 text-sm">{loadError}</p>
+      <button type="button" onClick={load} className="btn-primary">Retry</button>
     </div>
   )
 
