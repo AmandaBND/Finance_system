@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { revenueApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
+import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Search, Edit2, Trash2, X, TrendingUp } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
 const STATUS_COLORS: any = { Paid: 'bg-emerald-100 text-emerald-700', Pending: 'bg-amber-100 text-amber-700', Overdue: 'bg-red-100 text-red-700' }
-const EMPTY = { client_name: '', project_name: '', service_type: '', invoice_number: '', invoice_date: format(new Date(), 'yyyy-MM-dd'), due_date: '', amount: '', payment_status: 'Pending', payment_method: '', is_recurring: 0, billing_cycle: 'One-time', notes: '', currency: 'LKR' }
+const EMPTY = { client_name: '', project_name: '', service_type: '', invoice_number: '', invoice_date: format(new Date(), 'yyyy-MM-dd'), due_date: '', amount: '', amount_primary: '', payment_status: 'Pending', payment_method: '', is_recurring: 0, billing_cycle: 'One-time', notes: '', currency: 'LKR' }
 
 function CurrencySelector({ value, onChange, options }: { value: string, onChange: (v: string) => void, options: string[] }) {
   return (
@@ -40,9 +41,14 @@ export default function Revenue() {
   function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || defaultCurrency || 'USD' }); setModal(true) }
 
   async function save() {
+    const cur = form.currency || defaultCurrency || 'USD'
+    const primaryErr = validatePrimaryAmount(cur, defaultCurrency, form.amount_primary)
+    if (primaryErr) { toast.error(primaryErr); return }
+    const payload = { ...form }
+    if (!needsPrimaryConversion(cur, defaultCurrency)) payload.amount_primary = form.amount
     try {
-      if (editing) await revenueApi.update(editing.id, form)
-      else await revenueApi.create(form)
+      if (editing) await revenueApi.update(editing.id, payload)
+      else await revenueApi.create(payload)
       toast.success(editing ? 'Updated' : 'Revenue added')
       setModal(false); load()
     } catch (err: any) { toast.error(err.response?.data?.error || 'Error') }
@@ -138,8 +144,9 @@ export default function Revenue() {
                 <div><label className="label">Invoice Number</label><input className="input" value={form.invoice_number} onChange={e => setForm({...form, invoice_number: e.target.value})} /></div>
                 <div><label className="label">Invoice Date</label><input className="input" type="date" value={form.invoice_date} onChange={e => setForm({...form, invoice_date: e.target.value})} /></div>
                 <div><label className="label">Due Date</label><input className="input" type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} /></div>
-                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v})} /></div>
+                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v, amount_primary: v === defaultCurrency ? '' : form.amount_primary})} /></div>
                 <div><label className="label">Amount ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'}) *</label><input className="input" type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} /></div>
+                <PrimaryCurrencyAmountField currency={form.currency || defaultCurrency} primaryCurrency={defaultCurrency} value={form.amount_primary} onChange={v => setForm({ ...form, amount_primary: v })} />
                 <div><label className="label">Payment Status</label>
                   <select className="input" value={form.payment_status} onChange={e => setForm({...form, payment_status: e.target.value})}>
                     {['Pending','Paid','Overdue'].map(s => <option key={s}>{s}</option>)}

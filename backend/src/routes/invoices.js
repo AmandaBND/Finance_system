@@ -6,6 +6,7 @@ const { generateInvoicePDF } = require('../services/pdfService');
 const { sendInvoiceEmail } = require('../services/emailService');
 const { enforceLimit } = require('../lib/enforceLimits');
 const { isCurrencyAllowed, normalizeCurrencyList, getAllowedCurrencies } = require('../lib/planLimits');
+const { resolveAmountPrimary } = require('../lib/primaryCurrency');
 
 function syncInvoiceRevenue(inv, companyId) {
   if (!inv || !inv.invoice_number || !companyId) return;
@@ -13,14 +14,14 @@ function syncInvoiceRevenue(inv, companyId) {
   const invoiceDate = inv.issue_date || format(new Date(), 'yyyy-MM-dd');
   const paidDate = inv.paid_date || (inv.status === 'Paid' ? format(new Date(), 'yyyy-MM-dd') : null);
   const paymentStatus = inv.status === 'Paid' ? 'Paid' : 'Pending';
-  const amount = parseFloat(inv.total || 0);
+  const amount = parseFloat(inv.amount_primary != null ? inv.amount_primary : inv.total || 0);
   const currency = inv.currency || 'LKR';
   const paymentMethod = inv.payment_methods || 'Bank Transfer';
   const notes = `Auto-recorded from Invoice #${inv.invoice_number}`;
 
   if (existing) {
     db.prepare(`
-      UPDATE revenue SET client_name=?, project_name=?, service_type=?, invoice_date=?, due_date=?, amount=?, payment_status=?, payment_method=?, is_recurring=0, billing_cycle='One-time', notes=?, currency=?, auto_recorded=1, updated_at=CURRENT_TIMESTAMP
+      UPDATE revenue SET client_name=?, project_name=?, service_type=?, invoice_date=?, due_date=?, amount=?, amount_primary=?, payment_status=?, payment_method=?, is_recurring=0, billing_cycle='One-time', notes=?, currency=?, auto_recorded=1, updated_at=CURRENT_TIMESTAMP
       WHERE id=? AND company_id=?
     `).run(
       inv.client_name,
@@ -28,6 +29,7 @@ function syncInvoiceRevenue(inv, companyId) {
       null,
       paidDate || invoiceDate,
       inv.due_date,
+      amount,
       amount,
       paymentStatus,
       paymentMethod,
@@ -38,7 +40,7 @@ function syncInvoiceRevenue(inv, companyId) {
     );
   } else if (['Sent', 'Overdue', 'Paid'].includes(inv.status)) {
     db.prepare(`
-      INSERT INTO revenue (client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, payment_status, payment_method, is_recurring, billing_cycle, notes, currency, auto_recorded, company_id)
+      INSERT INTO revenue (client_name, project_name, service_type, invoice_number, invoice_date, due_date, amount, amount_primary, payment_status, payment_method, is_recurring, billing_cycle, notes, currency, auto_recorded, company_id)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)
     `).run(
       inv.client_name,
@@ -47,6 +49,7 @@ function syncInvoiceRevenue(inv, companyId) {
       inv.invoice_number,
       paidDate || invoiceDate,
       inv.due_date,
+      amount,
       amount,
       paymentStatus,
       paymentMethod,
@@ -129,7 +132,7 @@ router.post('/', (req, res) => {
     const {
       client_id, client_name, client_email, client_address, client_company,
       issue_date, due_date, items, tax_rate, discount, notes, terms, status,
-      currency = 'LKR', payment_methods = 'bank'
+      currency = 'LKR', payment_methods = 'bank', amount_primary
     } = req.body;
     const allowedCurrencies = getAllowedCompanyCurrencies(cid, plan);
     if (!isCurrencyAllowed(plan, currency, allowedCurrencies)) {
@@ -140,14 +143,20 @@ router.post('/', (req, res) => {
     const subtotal = items.reduce((s, i) => s + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0);
     const tax_amount = (subtotal * (parseFloat(tax_rate) || 0)) / 100;
     const total = subtotal + tax_amount - (parseFloat(discount) || 0);
+    let amountPrimary;
+    try {
+      amountPrimary = resolveAmountPrimary({ companyId: cid, currency, amount: total, amount_primary });
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message });
+    }
 
     const result = db.prepare(`
       INSERT INTO invoices (invoice_number, client_id, client_name, client_email, client_address, client_company,
-        issue_date, due_date, subtotal, tax_rate, tax_amount, discount, total,
+        issue_date, due_date, subtotal, tax_rate, tax_amount, discount, total, amount_primary,
         status, notes, terms, currency, currency_symbol, payment_methods, company_id)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(invoice_number, client_id || null, client_name, client_email, client_address, client_company,
-      issue_date, due_date, subtotal, tax_rate || 0, tax_amount, discount || 0, total,
+      issue_date, due_date, subtotal, tax_rate || 0, tax_amount, discount || 0, total, amountPrimary,
       status || 'Draft', notes, terms, currency, currency_symbol, payment_methods, cid);
 
     const invoiceId = result.lastInsertRowid;
@@ -174,7 +183,7 @@ router.put('/:id', (req, res) => {
     const {
       client_id, client_name, client_email, client_address, client_company,
       issue_date, due_date, items, tax_rate, discount, notes, terms, status, paid_date,
-      currency = 'LKR', payment_methods = 'bank'
+      currency = 'LKR', payment_methods = 'bank', amount_primary
     } = req.body;
     const allowedCurrencies = getAllowedCompanyCurrencies(cid, plan);
     if (!isCurrencyAllowed(plan, currency, allowedCurrencies)) {
@@ -184,15 +193,21 @@ router.put('/:id', (req, res) => {
     const subtotal = items.reduce((s, i) => s + (parseFloat(i.quantity) * parseFloat(i.unit_price)), 0);
     const tax_amount = (subtotal * (parseFloat(tax_rate) || 0)) / 100;
     const total = subtotal + tax_amount - (parseFloat(discount) || 0);
+    let amountPrimary;
+    try {
+      amountPrimary = resolveAmountPrimary({ companyId: cid, currency, amount: total, amount_primary });
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message });
+    }
 
     const r = db.prepare(`
       UPDATE invoices SET client_id=?, client_name=?, client_email=?, client_address=?, client_company=?,
-        issue_date=?, due_date=?, subtotal=?, tax_rate=?, tax_amount=?, discount=?, total=?,
+        issue_date=?, due_date=?, subtotal=?, tax_rate=?, tax_amount=?, discount=?, total=?, amount_primary=?,
         status=?, notes=?, terms=?, paid_date=?, currency=?, currency_symbol=?, payment_methods=?,
         updated_at=CURRENT_TIMESTAMP
       WHERE id=? AND company_id=?
     `).run(client_id || null, client_name, client_email, client_address, client_company,
-      issue_date, due_date, subtotal, tax_rate || 0, tax_amount, discount || 0, total,
+      issue_date, due_date, subtotal, tax_rate || 0, tax_amount, discount || 0, total, amountPrimary,
       status, notes, terms, paid_date || null, currency, currency_symbol, payment_methods, req.params.id, cid);
     if (!r.changes) return res.status(404).json({ error: 'Not found' });
 

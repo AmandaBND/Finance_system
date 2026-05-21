@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../database');
 const { format, addMonths, addYears, addDays } = require('date-fns');
 const { isCurrencyAllowed, normalizeCurrencyList, getAllowedCurrencies } = require('../lib/planLimits');
+const { resolveAmountPrimary } = require('../lib/primaryCurrency');
 
 router.get('/', (req, res) => {
   try {
@@ -28,15 +29,22 @@ router.post('/', (req, res) => {
   try {
     const cid = req.companyId;
     const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
-    const { name, type, category, billing_cycle, amount, currency, next_payment_date, auto_renewal, client_vendor, email, reminder_days, notes } = req.body;
+    const { name, type, category, billing_cycle, amount, currency, next_payment_date, auto_renewal, client_vendor, email, reminder_days, notes, amount_primary } = req.body;
+    const currencyVal = currency || 'LKR';
     const allowedCurrencies = getAllowedCompanyCurrencies(cid, plan);
-    if (!isCurrencyAllowed(plan, currency || 'LKR', allowedCurrencies)) {
-      return res.status(400).json({ error: `Currency ${currency || 'LKR'} is not allowed for your plan`, allowedCurrencies });
+    if (!isCurrencyAllowed(plan, currencyVal, allowedCurrencies)) {
+      return res.status(400).json({ error: `Currency ${currencyVal} is not allowed for your plan`, allowedCurrencies });
+    }
+    let amountPrimary;
+    try {
+      amountPrimary = resolveAmountPrimary({ companyId: cid, currency: currencyVal, amount, amount_primary });
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message });
     }
     const result = db.prepare(`
-      INSERT INTO recurring_payments (name, type, category, billing_cycle, amount, currency, next_payment_date, auto_renewal, client_vendor, email, reminder_days, notes, company_id)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `).run(name, type, category, billing_cycle || 'Monthly', amount, currency || 'LKR', next_payment_date, auto_renewal !== false ? 1 : 0, client_vendor, email, reminder_days || 3, notes, cid);
+      INSERT INTO recurring_payments (name, type, category, billing_cycle, amount, amount_primary, currency, next_payment_date, auto_renewal, client_vendor, email, reminder_days, notes, company_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).run(name, type, category, billing_cycle || 'Monthly', amount, amountPrimary, currencyVal, next_payment_date, auto_renewal !== false ? 1 : 0, client_vendor, email, reminder_days || 3, notes, cid);
     res.json({ id: result.lastInsertRowid, message: 'Recurring payment added' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -45,15 +53,22 @@ router.put('/:id', (req, res) => {
   try {
     const cid = req.companyId;
     const plan = db.prepare('SELECT plan FROM companies WHERE id=?').get(cid)?.plan || 'free';
-    const { name, type, category, billing_cycle, amount, currency, next_payment_date, auto_renewal, status, client_vendor, email, reminder_days, notes } = req.body;
+    const { name, type, category, billing_cycle, amount, currency, next_payment_date, auto_renewal, status, client_vendor, email, reminder_days, notes, amount_primary } = req.body;
+    const currencyVal = currency || 'LKR';
     const allowedCurrencies = getAllowedCompanyCurrencies(cid, plan);
-    if (!isCurrencyAllowed(plan, currency || 'LKR', allowedCurrencies)) {
-      return res.status(400).json({ error: `Currency ${currency || 'LKR'} is not allowed for your plan`, allowedCurrencies });
+    if (!isCurrencyAllowed(plan, currencyVal, allowedCurrencies)) {
+      return res.status(400).json({ error: `Currency ${currencyVal} is not allowed for your plan`, allowedCurrencies });
+    }
+    let amountPrimary;
+    try {
+      amountPrimary = resolveAmountPrimary({ companyId: cid, currency: currencyVal, amount, amount_primary });
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message });
     }
     const r = db.prepare(`
-      UPDATE recurring_payments SET name=?, type=?, category=?, billing_cycle=?, amount=?, currency=?, next_payment_date=?, auto_renewal=?, status=?, client_vendor=?, email=?, reminder_days=?, notes=?, updated_at=CURRENT_TIMESTAMP
+      UPDATE recurring_payments SET name=?, type=?, category=?, billing_cycle=?, amount=?, amount_primary=?, currency=?, next_payment_date=?, auto_renewal=?, status=?, client_vendor=?, email=?, reminder_days=?, notes=?, updated_at=CURRENT_TIMESTAMP
       WHERE id=? AND company_id=?
-    `).run(name, type, category, billing_cycle, amount, currency || 'LKR', next_payment_date, auto_renewal ? 1 : 0, status || 'Active', client_vendor, email, reminder_days || 3, notes, req.params.id, cid);
+    `).run(name, type, category, billing_cycle, amount, amountPrimary, currencyVal, next_payment_date, auto_renewal ? 1 : 0, status || 'Active', client_vendor, email, reminder_days || 3, notes, req.params.id, cid);
     if (!r.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ message: 'Updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -89,13 +104,14 @@ router.post('/:id/process', (req, res) => {
 
     if (rp.type === 'Expense') {
       db.prepare(`
-        INSERT INTO expenses (title, category, vendor, amount, payment_date, payment_method, currency, recurring_payment_id, notes, company_id)
-        VALUES (?, ?, ?, ?, ?, 'Auto-recurring', ?, ?, ?, ?)
+        INSERT INTO expenses (title, category, vendor, amount, amount_primary, payment_date, payment_method, currency, recurring_payment_id, notes, company_id)
+        VALUES (?, ?, ?, ?, ?, ?, 'Auto-recurring', ?, ?, ?, ?)
       `).run(
         rp.name,
         rp.category || 'Recurring',
         rp.client_vendor,
         rp.amount,
+        rp.amount_primary != null ? rp.amount_primary : rp.amount,
         paidDate,
         rp.currency || 'LKR',
         rp.id,
@@ -103,14 +119,16 @@ router.post('/:id/process', (req, res) => {
         cid
       );
     } else if (rp.type === 'Income') {
+      const rpPrimary = rp.amount_primary != null ? rp.amount_primary : rp.amount;
       db.prepare(`
-        INSERT INTO revenue (client_name, project_name, service_type, amount, invoice_date, payment_status, currency, recurring_payment_id, is_recurring, billing_cycle, notes, auto_recorded, company_id)
-        VALUES (?, ?, ?, ?, ?, 'Paid', ?, ?, 1, ?, ?, 1, ?)
+        INSERT INTO revenue (client_name, project_name, service_type, amount, amount_primary, invoice_date, payment_status, currency, recurring_payment_id, is_recurring, billing_cycle, notes, auto_recorded, company_id)
+        VALUES (?, ?, ?, ?, ?, ?, 'Paid', ?, ?, 1, ?, ?, 1, ?)
       `).run(
         rp.client_vendor,
         rp.name,
         rp.category,
         rp.amount,
+        rpPrimary,
         paidDate,
         rp.currency || 'LKR',
         rp.id,

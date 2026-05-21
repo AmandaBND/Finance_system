@@ -35,6 +35,7 @@ router.get('/', (req, res) => {
       delete settings.smtp_pass;
       settings.plan = plan
       settings.allowed_currencies = parseAllowedCurrencies(settings.allowed_currencies, plan)
+      settings.currency_locked = !!settings.currency_locked
     }
     res.json(settings || {});
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -47,6 +48,7 @@ router.get('/full', (req, res) => {
     if (settings) {
       settings.plan = plan
       settings.allowed_currencies = parseAllowedCurrencies(settings.allowed_currencies, plan)
+      settings.currency_locked = !!settings.currency_locked
     }
     res.json(settings);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -56,7 +58,11 @@ router.put('/', (req, res) => {
   try {
     const cid = req.companyId;
     const plan = getCompanyPlan(cid)
-    if (req.body.currency !== undefined) {
+    const locked = db.prepare('SELECT currency_locked FROM settings WHERE company_id=? LIMIT 1').get(cid);
+    if (locked?.currency_locked) {
+      delete req.body.currency;
+      delete req.body.currency_symbol;
+    } else if (req.body.currency !== undefined) {
       const currency = String(req.body.currency || 'USD').toUpperCase();
       req.body.currency = SUPPORTED_CURRENCIES.includes(currency) ? currency : 'USD';
       if (req.body.currency_symbol === undefined || req.body.currency_symbol === '') {

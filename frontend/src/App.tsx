@@ -16,6 +16,7 @@ import CompanyLogin from './pages/CompanyLogin'
 import Landing from './pages/Landing'
 import Signup from './pages/Signup'
 import OnboardingPlans from './pages/OnboardingPlans'
+import OnboardingCurrency from './pages/OnboardingCurrency'
 import Unauthorized from './pages/Unauthorized'
 import PortalLogin from './pages/PortalLogin'
 import PortalLayout from './components/PortalLayout/PortalLayout'
@@ -79,7 +80,7 @@ function SuperadminGuard({ children }: { children: React.ReactNode }) {
 /** Loads /auth/me: blocks client/employee from admin shell; sends first-time companies to onboarding */
 function AdminAppGate() {
   const navigate = useNavigate()
-  const [state, setState] = useState<'loading' | 'ok' | 'blocked' | 'onboard'>('loading')
+  const [state, setState] = useState<'loading' | 'ok' | 'blocked' | 'onboard' | 'currency'>('loading')
 
   useEffect(() => {
     let cancelled = false
@@ -94,6 +95,10 @@ function AdminAppGate() {
         const fl = !!(data.first_login || data.company?.first_login)
         if (fl) {
           setState('onboard')
+          return
+        }
+        if (!data.currency_locked && data.authType !== 'legacy_admin') {
+          setState('currency')
           return
         }
         localStorage.removeItem('admin_first_login')
@@ -115,6 +120,7 @@ function AdminAppGate() {
   }
   if (state === 'blocked') return <Navigate to="/unauthorized" replace />
   if (state === 'onboard') return <Navigate to="/onboarding/plans" replace />
+  if (state === 'currency') return <Navigate to="/onboarding/currency" replace />
   return <Layout />
 }
 
@@ -127,6 +133,7 @@ export default function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<CompanyLogin />} />
         <Route path="/onboarding/plans" element={<SessionGuard><OnboardingPlans /></SessionGuard>} />
+        <Route path="/onboarding/currency" element={<SessionGuard><OnboardingCurrency /></SessionGuard>} />
         <Route path="/unauthorized" element={<Unauthorized />} />
 
         <Route path="/client-login" element={<Navigate to="/portal/login" replace />} />

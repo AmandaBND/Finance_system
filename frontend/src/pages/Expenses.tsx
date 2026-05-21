@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { expenseApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
+import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Search, Edit2, Trash2, X, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
 const CATEGORIES = ['Salaries','Freelancers','Software Tools','Marketing & Ads','Office Expenses','Internet','Equipment','Taxes','Subscriptions','Travel','Content Production','AI Tools','Hosting','Miscellaneous']
-const EMPTY = { title: '', category: '', vendor: '', amount: '', payment_date: format(new Date(), 'yyyy-MM-dd'), payment_method: '', is_recurring: 0, billing_cycle: '', notes: '', currency: 'LKR' }
+const EMPTY = { title: '', category: '', vendor: '', amount: '', amount_primary: '', payment_date: format(new Date(), 'yyyy-MM-dd'), payment_method: '', is_recurring: 0, billing_cycle: '', notes: '', currency: 'LKR' }
 
 function CurrencySelector({ value, onChange, options }: { value: string, onChange: (v: string) => void, options: string[] }) {
   return (
@@ -39,9 +40,14 @@ export default function Expenses() {
   function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || defaultCurrency || 'USD' }); setReceiptFile(null); setModal(true) }
 
   async function save() {
+    const cur = form.currency || defaultCurrency || 'USD'
+    const primaryErr = validatePrimaryAmount(cur, defaultCurrency, form.amount_primary)
+    if (primaryErr) { toast.error(primaryErr); return }
     try {
       const fd = new FormData()
-      Object.entries(form).forEach(([k, v]) => fd.append(k, String(v ?? '')))
+      const payload = { ...form }
+      if (!needsPrimaryConversion(cur, defaultCurrency)) payload.amount_primary = form.amount
+      Object.entries(payload).forEach(([k, v]) => fd.append(k, String(v ?? '')))
       if (receiptFile) fd.append('receipt', receiptFile)
       if (editing) await expenseApi.update(editing.id, fd)
       else await expenseApi.create(fd)
@@ -141,8 +147,9 @@ export default function Expenses() {
                   </select>
                 </div>
                 <div><label className="label">Vendor</label><input className="input" value={form.vendor} onChange={e => setForm({...form, vendor: e.target.value})} /></div>
-                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v})} /></div>
+                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v, amount_primary: v === defaultCurrency ? '' : form.amount_primary})} /></div>
                 <div><label className="label">Amount ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'}) *</label><input className="input" type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} /></div>
+                <PrimaryCurrencyAmountField currency={form.currency || defaultCurrency} primaryCurrency={defaultCurrency} value={form.amount_primary} onChange={v => setForm({ ...form, amount_primary: v })} />
                 <div><label className="label">Payment Date</label><input className="input" type="date" value={form.payment_date} onChange={e => setForm({...form, payment_date: e.target.value})} /></div>
                 <div><label className="label">Payment Method</label>
                   <select className="input" value={form.payment_method} onChange={e => setForm({...form, payment_method: e.target.value})}>

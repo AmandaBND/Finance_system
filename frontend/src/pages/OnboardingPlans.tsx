@@ -32,8 +32,12 @@ export default function OnboardingPlans() {
           navigate('/unauthorized', { replace: true })
           return
         }
-        if (!data.first_login && !data.company?.first_login) {
+        if (data.currency_locked) {
           navigate('/app/dashboard', { replace: true })
+          return
+        }
+        if (!data.first_login && !data.company?.first_login) {
+          navigate('/onboarding/currency', { replace: true })
           return
         }
       } catch {
@@ -50,9 +54,8 @@ export default function OnboardingPlans() {
     setSaving(plan)
     try {
       await onboardingApi.selectPlan(plan)
-      localStorage.removeItem('admin_first_login')
       toast.success('Plan saved')
-      navigate('/app/dashboard', { replace: true })
+      navigate('/onboarding/currency', { replace: true })
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Could not save plan')
     } finally {

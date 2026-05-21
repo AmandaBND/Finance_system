@@ -17,7 +17,7 @@ export default function CompanyLogin() {
   const [loading, setLoading] = useState(false)
   const [transition, setTransition] = useState(false)
 
-  async function finishAuth(res: { data: { token: string; username?: string; user?: { name?: string; email?: string; role?: string }; first_login?: boolean; authType?: string } }) {
+  async function finishAuth(res: { data: { token: string; username?: string; user?: { name?: string; email?: string; role?: string }; first_login?: boolean; currency_locked?: boolean; authType?: string } }) {
     const d = res.data
     localStorage.setItem('admin_token', d.token)
     const display = d.user?.name || d.user?.email || d.username || 'Admin'
@@ -30,6 +30,7 @@ export default function CompanyLogin() {
     await new Promise(r => setTimeout(r, 1800))
     setTransition(false)
     if (d.first_login) navigate('/onboarding/plans', { replace: true })
+    else if (!d.currency_locked && d.authType !== 'legacy_admin') navigate('/onboarding/currency', { replace: true })
     else navigate('/app/dashboard', { replace: true })
   }
 

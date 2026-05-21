@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { dashboardApi, aiApi, employeeAdminApi, formatCurrency } from '../services/api'
+import { useCompanySettings } from '../hooks/useSettings'
 import { TrendingUp, TrendingDown, DollarSign, CreditCard, AlertCircle, RefreshCw, Brain, FileText, Calendar, Zap, Wallet, Gift, X, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
@@ -46,6 +47,8 @@ function AIInsightCard({ insight }: any) {
 }
 
 export default function Dashboard() {
+  const { currencySymbol } = useCompanySettings()
+  const fmt = (n: number) => fmt(n, currencySymbol)
   const [data, setData] = useState<any>(null)
   const [ai, setAi] = useState<any>(null)
   const [loadingAi, setLoadingAi] = useState(false)
@@ -127,29 +130,29 @@ export default function Dashboard() {
 
       {/* Top Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Monthly Revenue" value={formatCurrency(s.monthRevenue)} sub={`Year: ${formatCurrency(s.yearRevenue)}`} icon={TrendingUp} color="bg-primary" trendVal={s.revenueGrowth} />
-        <StatCard label="Monthly Profit" value={formatCurrency(s.monthProfit)} sub={`Margin: ${s.profitMargin}%`} icon={DollarSign} color="bg-emerald-500" trendVal={s.profitGrowth} />
-        <StatCard label="Monthly Expenses" value={formatCurrency(s.monthExpenses)} sub={`Burn Rate: ${formatCurrency(s.burnRate)}/mo`} icon={CreditCard} color="bg-amber-500" />
-        <StatCard label="Cash Balance" value={formatCurrency(s.cashBalance)} sub={`MRR: ${formatCurrency(s.mrr)}`} icon={DollarSign} color="bg-blue-500" />
+        <StatCard label="Monthly Revenue" value={fmt(s.monthRevenue)} sub={`Year: ${fmt(s.yearRevenue)}`} icon={TrendingUp} color="bg-primary" trendVal={s.revenueGrowth} />
+        <StatCard label="Monthly Profit" value={fmt(s.monthProfit)} sub={`Margin: ${s.profitMargin}%`} icon={DollarSign} color="bg-emerald-500" trendVal={s.profitGrowth} />
+        <StatCard label="Monthly Expenses" value={fmt(s.monthExpenses)} sub={`Burn Rate: ${fmt(s.burnRate)}/mo`} icon={CreditCard} color="bg-amber-500" />
+        <StatCard label="Cash Balance" value={fmt(s.cashBalance)} sub={`MRR: ${fmt(s.mrr)}`} icon={DollarSign} color="bg-blue-500" />
       </div>
 
       {/* Secondary Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card p-4 flex items-center gap-4">
           <div className="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center"><AlertCircle size={18} className="text-orange-500" /></div>
-          <div><p className="text-lg font-bold text-slate-800">{s.overdueInvoices}</p><p className="text-xs text-slate-500">Overdue Invoices</p><p className="text-xs text-orange-500 font-medium">{formatCurrency(s.overdueAmount)}</p></div>
+          <div><p className="text-lg font-bold text-slate-800">{s.overdueInvoices}</p><p className="text-xs text-slate-500">Overdue Invoices</p><p className="text-xs text-orange-500 font-medium">{fmt(s.overdueAmount)}</p></div>
         </div>
         <div className="card p-4 flex items-center gap-4">
           <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center"><FileText size={18} className="text-blue-500" /></div>
-          <div><p className="text-lg font-bold text-slate-800">{s.pendingInvoices}</p><p className="text-xs text-slate-500">Pending Invoices</p><p className="text-xs text-blue-500 font-medium">{formatCurrency(s.pendingInvoiceAmount)}</p></div>
+          <div><p className="text-lg font-bold text-slate-800">{s.pendingInvoices}</p><p className="text-xs text-slate-500">Pending Invoices</p><p className="text-xs text-blue-500 font-medium">{fmt(s.pendingInvoiceAmount)}</p></div>
         </div>
         <div className="card p-4 flex items-center gap-4">
           <div className="w-9 h-9 bg-purple-100 rounded-lg flex items-center justify-center"><TrendingUp size={18} className="text-purple-500" /></div>
-          <div><p className="text-lg font-bold text-slate-800">{formatCurrency(s.accountsReceivable)}</p><p className="text-xs text-slate-500">Accounts Receivable</p></div>
+          <div><p className="text-lg font-bold text-slate-800">{fmt(s.accountsReceivable)}</p><p className="text-xs text-slate-500">Accounts Receivable</p></div>
         </div>
         <div className="card p-4 flex items-center gap-4">
           <div className="w-9 h-9 bg-violet-100 rounded-lg flex items-center justify-center"><Wallet size={18} className="text-violet-600" /></div>
-          <div><p className="text-lg font-bold text-slate-800">{formatCurrency(s.monthSalaries || 0)}</p><p className="text-xs text-slate-500">Monthly Payroll</p><p className="text-xs text-red-400 font-medium">{s.pendingSalaries} pending · {formatCurrency(s.pendingSalaryAmount)}</p></div>
+          <div><p className="text-lg font-bold text-slate-800">{fmt(s.monthSalaries || 0)}</p><p className="text-xs text-slate-500">Monthly Payroll</p><p className="text-xs text-red-400 font-medium">{s.pendingSalaries} pending · {fmt(s.pendingSalaryAmount)}</p></div>
         </div>
       </div>
 
@@ -173,7 +176,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `Rs.${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }} />
+              <Tooltip formatter={(v: any) => fmt(v)} contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Area type="monotone" dataKey="revenue" stroke="#6366f1" strokeWidth={2} fill="url(#revGrad)" name="Revenue" />
               <Area type="monotone" dataKey="expenses" stroke="#f59e0b" strokeWidth={2} fill="url(#expGrad)" name="Expenses" />
@@ -191,7 +194,7 @@ export default function Dashboard() {
                   <Pie data={expBreak} dataKey="total" nameKey="category" cx="50%" cy="50%" outerRadius={65} innerRadius={35}>
                     {expBreak.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ borderRadius: '10px', border: 'none', fontSize: 12 }} />
+                  <Tooltip formatter={(v: any) => fmt(v)} contentStyle={{ borderRadius: '10px', border: 'none', fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="mt-3 space-y-1.5">
@@ -201,7 +204,7 @@ export default function Dashboard() {
                       <span className="w-2.5 h-2.5 rounded-full" style={{ background: COLORS[i % COLORS.length] }}></span>
                       <span className="text-slate-600">{e.category}</span>
                     </div>
-                    <span className="font-medium text-slate-700">{formatCurrency(e.total)}</span>
+                    <span className="font-medium text-slate-700">{fmt(e.total)}</span>
                   </div>
                 ))}
               </div>
@@ -275,7 +278,7 @@ export default function Dashboard() {
                     <p className="text-xs text-slate-400">{p.next_payment_date} · {p.billing_cycle}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-bold text-slate-700">{formatCurrency(p.amount)}</p>
+                    <p className="text-sm font-bold text-slate-700">{fmt(p.amount)}</p>
                     <span className={`badge text-[10px] ${p.type === 'Income' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{p.type}</span>
                   </div>
                 </div>
@@ -343,7 +346,7 @@ export default function Dashboard() {
                   <td className="table-cell font-mono text-xs text-primary">{inv.invoice_number}</td>
                   <td className="table-cell font-medium">{inv.client_name}</td>
                   <td className="table-cell text-slate-400 text-xs">{inv.due_date}</td>
-                  <td className="table-cell text-right font-semibold">{formatCurrency(inv.total)}</td>
+                  <td className="table-cell text-right font-semibold">{fmt(inv.total)}</td>
                   <td className="table-cell text-center"><span className={`badge ${statusColors[inv.status]}`}>{inv.status}</span></td>
                 </tr>
               ))}

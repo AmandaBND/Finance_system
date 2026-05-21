@@ -23,6 +23,7 @@ export function useCompanySettings() {
   const allowedCurrencies = getAllowedCurrencyOptions(plan, settings?.allowed_currencies || [])
   const defaultCurrency = getDefaultCurrency(settings)
   const currencySymbol = CURRENCY_SYMBOLS[defaultCurrency] || settings?.currency_symbol || '$'
+  const currencyLocked = !!settings?.currency_locked
 
-  return { loading, settings, allowedCurrencies, defaultCurrency, currencySymbol }
+  return { loading, settings, allowedCurrencies, defaultCurrency, currencySymbol, currencyLocked }
 }

@@ -37,6 +37,7 @@ export const authApi = {
 
 export const onboardingApi = {
   selectPlan: (plan: string) => api.post('/onboarding/plan', { plan }),
+  setPrimaryCurrency: (currency: string) => api.post('/onboarding/currency', { currency }),
 }
 
 const superApi = axios.create({ baseURL: '/api', timeout: 30000 })

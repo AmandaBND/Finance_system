@@ -4,13 +4,14 @@ const db = require('../database');
 const { format } = require('date-fns');
 const { generateSalarySlipPDF } = require('../services/pdfService');
 const { sendSalarySlipEmail } = require('../services/emailService');
+const { resolveAmountPrimary } = require('../lib/primaryCurrency');
 
 function syncSalaryExpense(sal) {
   if (!sal || !sal.id || sal.status !== 'Paid' || !sal.company_id) return;
   const cid = sal.company_id;
   const paidDate = sal.payment_date || format(new Date(), 'yyyy-MM-dd');
   const existing = db.prepare(`SELECT id FROM expenses WHERE company_id=? AND salary_payment_id=?`).get(cid, sal.id);
-  const amount = parseFloat(sal.net_salary || 0);
+  const amount = parseFloat(sal.net_salary_primary != null ? sal.net_salary_primary : sal.net_salary || 0);
   const currency = sal.currency || 'LKR';
   const category = 'Payroll';
   const title = `Salary - ${sal.employee_name}`;
@@ -18,14 +19,14 @@ function syncSalaryExpense(sal) {
 
   if (existing) {
     db.prepare(`
-      UPDATE expenses SET title=?, category=?, amount=?, payment_date=?, currency=?, notes=?
+      UPDATE expenses SET title=?, category=?, amount=?, amount_primary=?, payment_date=?, currency=?, notes=?
       WHERE id=? AND company_id=?
-    `).run(title, category, amount, paidDate, currency, notes, existing.id, cid);
+    `).run(title, category, sal.net_salary, amount, paidDate, currency, notes, existing.id, cid);
   } else {
     db.prepare(`
-      INSERT INTO expenses (title, category, vendor, amount, payment_date, payment_method, currency, salary_payment_id, notes, company_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(title, category, sal.employee_name, amount, paidDate, 'Bank Transfer', currency, sal.id, notes, cid);
+      INSERT INTO expenses (title, category, vendor, amount, amount_primary, payment_date, payment_method, currency, salary_payment_id, notes, company_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(title, category, sal.employee_name, sal.net_salary, amount, paidDate, 'Bank Transfer', currency, sal.id, notes, cid);
   }
 }
 
@@ -50,13 +51,19 @@ router.get('/', (req, res) => {
 router.post('/', (req, res) => {
   try {
     const cid = req.companyId;
-    const { employee_id, employee_name, position, department, salary_type, base_salary, bonuses, deductions, payment_month, payment_date, payment_method, notes, currency } = req.body;
+    const { employee_id, employee_name, position, department, salary_type, base_salary, bonuses, deductions, payment_month, payment_date, payment_method, notes, currency, net_salary_primary } = req.body;
     const net_salary = (parseFloat(base_salary) || 0) + (parseFloat(bonuses) || 0) - (parseFloat(deductions) || 0);
     const currencyVal = currency || 'LKR';
+    let netPrimary;
+    try {
+      netPrimary = resolveAmountPrimary({ companyId: cid, currency: currencyVal, amount: net_salary, amount_primary: net_salary_primary });
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message });
+    }
     const result = db.prepare(`
-      INSERT INTO salary_payments (employee_id, employee_name, position, department, salary_type, base_salary, bonuses, deductions, net_salary, payment_month, payment_date, payment_method, notes, currency, company_id)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-    `).run(employee_id, employee_name, position, department, salary_type || 'Monthly', base_salary, bonuses || 0, deductions || 0, net_salary, payment_month || format(new Date(), 'yyyy-MM'), payment_date, payment_method || 'Bank Transfer', notes, currencyVal, cid);
+      INSERT INTO salary_payments (employee_id, employee_name, position, department, salary_type, base_salary, bonuses, deductions, net_salary, net_salary_primary, payment_month, payment_date, payment_method, notes, currency, company_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).run(employee_id, employee_name, position, department, salary_type || 'Monthly', base_salary, bonuses || 0, deductions || 0, net_salary, netPrimary, payment_month || format(new Date(), 'yyyy-MM'), payment_date, payment_method || 'Bank Transfer', notes, currencyVal, cid);
     res.json({ id: result.lastInsertRowid, message: 'Salary record created' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -64,9 +71,16 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const cid = req.companyId;
-    const { base_salary, bonuses, deductions, payment_date, payment_method, status, notes, currency } = req.body;
+    const { base_salary, bonuses, deductions, payment_date, payment_method, status, notes, currency, net_salary_primary } = req.body;
     const net_salary = (parseFloat(base_salary) || 0) + (parseFloat(bonuses) || 0) - (parseFloat(deductions) || 0);
-    const r = db.prepare(`UPDATE salary_payments SET base_salary=?, bonuses=?, deductions=?, net_salary=?, payment_date=?, payment_method=?, status=?, notes=?, currency=? WHERE id=? AND company_id=?`).run(base_salary, bonuses || 0, deductions || 0, net_salary, payment_date, payment_method, status, notes, currency || 'LKR', req.params.id, cid);
+    const currencyVal = currency || 'LKR';
+    let netPrimary;
+    try {
+      netPrimary = resolveAmountPrimary({ companyId: cid, currency: currencyVal, amount: net_salary, amount_primary: net_salary_primary });
+    } catch (e) {
+      return res.status(e.status || 400).json({ error: e.message });
+    }
+    const r = db.prepare(`UPDATE salary_payments SET base_salary=?, bonuses=?, deductions=?, net_salary=?, net_salary_primary=?, payment_date=?, payment_method=?, status=?, notes=?, currency=? WHERE id=? AND company_id=?`).run(base_salary, bonuses || 0, deductions || 0, net_salary, netPrimary, payment_date, payment_method, status, notes, currencyVal, req.params.id, cid);
     if (!r.changes) return res.status(404).json({ error: 'Not found' });
     res.json({ message: 'Updated' });
   } catch (err) { res.status(500).json({ error: err.message }); }

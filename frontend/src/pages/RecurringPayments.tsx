@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { recurringApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
+import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Edit2, Trash2, X, CheckCircle, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format, addDays } from 'date-fns'
 
 const TYPE_COLORS: any = { Income: 'bg-emerald-100 text-emerald-700', Expense: 'bg-red-100 text-red-600' }
-const EMPTY = { name: '', type: 'Expense', category: '', billing_cycle: 'Monthly', amount: '', currency: 'LKR', next_payment_date: format(new Date(), 'yyyy-MM-dd'), auto_renewal: 1, client_vendor: '', email: '', reminder_days: 3, notes: '', status: 'Active' }
+const EMPTY = { name: '', type: 'Expense', category: '', billing_cycle: 'Monthly', amount: '', amount_primary: '', currency: 'LKR', next_payment_date: format(new Date(), 'yyyy-MM-dd'), auto_renewal: 1, client_vendor: '', email: '', reminder_days: 3, notes: '', status: 'Active' }
 
 function CurrencySelector({ value, onChange, options }: { value: string, onChange: (v: string) => void, options: string[] }) {
   return (
@@ -37,9 +38,14 @@ export default function RecurringPayments() {
   function openEdit(r: any) { setEditing(r); setForm({ ...r, currency: r.currency || defaultCurrency || 'USD' }); setModal(true) }
 
   async function save() {
+    const cur = form.currency || defaultCurrency || 'USD'
+    const primaryErr = validatePrimaryAmount(cur, defaultCurrency, form.amount_primary)
+    if (primaryErr) { toast.error(primaryErr); return }
+    const payload = { ...form }
+    if (!needsPrimaryConversion(cur, defaultCurrency)) payload.amount_primary = form.amount
     try {
-      if (editing) await recurringApi.update(editing.id, form)
-      else await recurringApi.create(form)
+      if (editing) await recurringApi.update(editing.id, payload)
+      else await recurringApi.create(payload)
       toast.success(editing ? 'Updated' : 'Recurring payment added')
       setModal(false); load()
     } catch (err: any) { toast.error(err.response?.data?.error || 'Error') }
@@ -176,8 +182,9 @@ export default function RecurringPayments() {
                     {['Monthly','Quarterly','Annual','Weekly'].map(c => <option key={c}>{c}</option>)}
                   </select>
                 </div>
-                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v})} /></div>
+                <div><label className="label">Currency</label><CurrencySelector value={form.currency || defaultCurrency || 'USD'} options={allowedCurrencies.length ? allowedCurrencies : SUPPORTED_CURRENCIES} onChange={v => setForm({...form, currency: v, amount_primary: v === defaultCurrency ? '' : form.amount_primary})} /></div>
                 <div><label className="label">Amount ({CURRENCY_SYMBOLS[form.currency] || 'Rs.'}) *</label><input className="input" type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} /></div>
+                <PrimaryCurrencyAmountField currency={form.currency || defaultCurrency} primaryCurrency={defaultCurrency} value={form.amount_primary} onChange={v => setForm({ ...form, amount_primary: v })} />
                 <div><label className="label">Next Payment Date</label><input className="input" type="date" value={form.next_payment_date} onChange={e => setForm({...form, next_payment_date: e.target.value})} /></div>
                 <div><label className="label">Client / Vendor</label><input className="input" value={form.client_vendor} onChange={e => setForm({...form, client_vendor: e.target.value})} /></div>
                 <div><label className="label">Reminder Email</label><input className="input" type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="Send reminder to..." /></div>
