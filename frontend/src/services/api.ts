@@ -208,7 +208,8 @@ export function getAllowedCurrencyOptions(plan: string, selected: any): string[]
 }
 
 export function getDefaultCurrency(settings: any) {
-  return (settings?.currency || 'USD').toUpperCase()
+  const currency = (settings?.currency || 'USD').toUpperCase()
+  return SUPPORTED_CURRENCIES.includes(currency) ? currency : 'USD'
 }
 
 // ── Portal API (client-facing, uses Bearer token) ─────────────────────────

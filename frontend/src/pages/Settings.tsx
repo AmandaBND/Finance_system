@@ -79,7 +79,8 @@ export default function Settings() {
       const r = await settingsApi.get()
       const settings = r.data || {}
       settings.allowed_currencies = parseCurrencies(settings.allowed_currencies)
-      settings.currency = (settings.currency || 'USD').toUpperCase()
+      const loadedCurrency = (settings.currency || 'USD').toUpperCase()
+      settings.currency = SUPPORTED_CURRENCIES.includes(loadedCurrency) ? loadedCurrency : 'USD'
       settings.currency_symbol = settings.currency_symbol || CURRENCY_SYMBOLS[settings.currency] || '$'
       if (!settings.allowed_currencies.length) settings.allowed_currencies = BASE_CURRENCIES
       setForm(settings)
@@ -127,7 +128,13 @@ export default function Settings() {
   async function save() {
     try {
       setSaving(true)
-      await settingsApi.update(form)
+      const normalizedCurrency = (form.currency || 'USD').toUpperCase()
+      const payload = {
+        ...form,
+        currency: SUPPORTED_CURRENCIES.includes(normalizedCurrency) ? normalizedCurrency : 'USD',
+        currency_symbol: form.currency_symbol || CURRENCY_SYMBOLS[normalizedCurrency] || '$'
+      }
+      await settingsApi.update(payload)
       toast.success('Settings saved!')
     } catch { toast.error('Failed to save') } finally { setSaving(false) }
   }

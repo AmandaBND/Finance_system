@@ -2,6 +2,10 @@ const db = require('../database');
 const { formatSriLankaTime } = require('../utils/timezoneHelper');
 
 const SUPPORTED_CURRENCIES = ['LKR', 'USD', 'EUR', 'GBP', 'AUD', 'SGD', 'INR', 'CAD', 'JPY'];
+const CURRENCY_SYMBOLS = {
+  LKR: 'Rs.', USD: '$', EUR: '€', GBP: '£',
+  AUD: 'A$', SGD: 'S$', INR: '₹', CAD: 'C$', JPY: '¥'
+};
 
 // Fallback rates (base USD) if API unreachable
 const FALLBACK_RATES = {
@@ -85,6 +89,18 @@ function convertFromLKR(amountLKR, toCurrency, rates) {
   return amt * (toRate / lkrRate);
 }
 
+// Convert any currency amount to any target currency using USD-based rates
+function convert(amount, fromCurrency, toCurrency, rates) {
+  const amt = parseFloat(amount) || 0;
+  if (amt === 0) return 0;
+  const from = (fromCurrency || 'LKR').toUpperCase();
+  const to = (toCurrency || 'LKR').toUpperCase();
+  if (from === to) return amt;
+  if (to === 'LKR') return convertToLKR(amt, from, rates);
+  const lkr = convertToLKR(amt, from, rates);
+  return convertFromLKR(lkr, to, rates);
+}
+
 // Get rate of 1 unit of currency in LKR
 function getRateToLKR(currency, rates) {
   const r = rates || getRates();
@@ -96,29 +112,30 @@ function getRateToLKR(currency, rates) {
 }
 
 // Summarize key rates for display
-function getDisplayRates(rates) {
+function getDisplayRates(rates, baseCurrency = 'LKR') {
   const r = rates || getRates();
-  const lkr = r.LKR || 299.50;
-  return SUPPORTED_CURRENCIES.filter(c => c !== 'LKR').map(c => ({
+  const base = (baseCurrency || 'LKR').toUpperCase();
+  const baseRate = base === 'LKR' ? (r.LKR || FALLBACK_RATES.LKR) : (r[base] || 1);
+  return SUPPORTED_CURRENCIES.filter(c => c !== base).map(c => ({
     currency: c,
-    rate_to_lkr: parseFloat((lkr / (r[c] || 1)).toFixed(2)),
-    rate_from_lkr: parseFloat(((r[c] || 1) / lkr).toFixed(6))
+    rate_to_base: parseFloat((baseRate / (r[c] || 1)).toFixed(6)),
+    rate_from_base: parseFloat(((r[c] || 1) / baseRate).toFixed(6))
   }));
 }
 
-// Sum records in LKR (each record has amount + currency field)
-function sumToLKR(records, amountField = 'amount', currencyField = 'currency', rates) {
+// Sum records in any target currency (each record has amount + currency field)
+function sumToCurrency(records, amountField = 'amount', currencyField = 'currency', targetCurrency = 'LKR', rates) {
   const r = rates || getRates();
   return records.reduce((sum, rec) => {
     const amt = parseFloat(rec[amountField]) || 0;
-    const cur = rec[currencyField] || 'LKR';
-    return sum + convertToLKR(amt, cur, r);
+    const cur = (rec[currencyField] || 'LKR').toUpperCase();
+    return sum + convert(amt, cur, targetCurrency, r);
   }, 0);
 }
 
 module.exports = {
   refreshRates, getCachedRatesData, getRates,
-  convertToLKR, convertFromLKR, getRateToLKR,
-  getDisplayRates, sumToLKR,
-  SUPPORTED_CURRENCIES, FALLBACK_RATES
+  convertToLKR, convertFromLKR, convert, getRateToLKR,
+  getDisplayRates, sumToCurrency,
+  SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS, FALLBACK_RATES
 };
