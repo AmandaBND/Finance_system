@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { recurringApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
+import { recurringApi, formatByCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
 import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Edit2, Trash2, X, CheckCircle, RefreshCw } from 'lucide-react'
@@ -64,11 +64,11 @@ export default function RecurringPayments() {
     await recurringApi.delete(r.id); toast.success('Deleted'); load()
   }
 
-  const totalIncome = records.filter(r => r.type === 'Income' && r.status === 'Active').reduce((s, r) => s + r.amount, 0)
-  const totalExpense = records.filter(r => r.type === 'Expense' && r.status === 'Active').reduce((s, r) => s + r.amount, 0)
+  const totalIncome = records.filter(r => r.type === 'Income' && r.status === 'Active').reduce((s, r) => s + Number(r.amount_primary != null ? r.amount_primary : r.amount), 0)
+  const totalExpense = records.filter(r => r.type === 'Expense' && r.status === 'Active').reduce((s, r) => s + Number(r.amount_primary != null ? r.amount_primary : r.amount), 0)
   const monthly = {
-    income: records.filter(r => r.type === 'Income' && r.status === 'Active' && r.billing_cycle === 'Monthly').reduce((s, r) => s + r.amount, 0),
-    expense: records.filter(r => r.type === 'Expense' && r.status === 'Active' && r.billing_cycle === 'Monthly').reduce((s, r) => s + r.amount, 0),
+    income: records.filter(r => r.type === 'Income' && r.status === 'Active' && r.billing_cycle === 'Monthly').reduce((s, r) => s + Number(r.amount_primary != null ? r.amount_primary : r.amount), 0),
+    expense: records.filter(r => r.type === 'Expense' && r.status === 'Active' && r.billing_cycle === 'Monthly').reduce((s, r) => s + Number(r.amount_primary != null ? r.amount_primary : r.amount), 0),
   }
 
   const dueIn7 = records.filter(r => {
@@ -80,9 +80,9 @@ export default function RecurringPayments() {
   return (
     <div className="space-y-5 fade-in">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-4"><p className="text-xs text-slate-500">Monthly Recurring Income</p><p className="text-xl font-bold text-emerald-600 mt-1">{formatCurrency(monthly.income)}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-500">Monthly Recurring Expense</p><p className="text-xl font-bold text-red-500 mt-1">{formatCurrency(monthly.expense)}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-500">Net Monthly Recurring</p><p className={`text-xl font-bold mt-1 ${monthly.income - monthly.expense >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(monthly.income - monthly.expense)}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500">Monthly Recurring Income</p><p className="text-xl font-bold text-emerald-600 mt-1">{formatByCurrency(monthly.income, defaultCurrency)}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500">Monthly Recurring Expense</p><p className="text-xl font-bold text-red-500 mt-1">{formatByCurrency(monthly.expense, defaultCurrency)}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500">Net Monthly Recurring</p><p className={`text-xl font-bold mt-1 ${monthly.income - monthly.expense >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatByCurrency(monthly.income - monthly.expense, defaultCurrency)}</p></div>
         <div className="card p-4"><p className="text-xs text-slate-500">Due in 7 Days</p><p className="text-xl font-bold text-amber-500 mt-1">{dueIn7.length} payments</p></div>
       </div>
 
@@ -135,9 +135,7 @@ export default function RecurringPayments() {
                     <td className="table-cell text-slate-500 text-sm">{r.client_vendor || '-'}</td>
                     <td className="table-cell text-center"><span className="badge bg-slate-100 text-slate-600">{r.billing_cycle}</span></td>
                     <td className="table-cell text-center"><span className="badge bg-slate-100 text-slate-700 font-mono">{r.currency || 'LKR'}</span></td>
-                    <td className="table-cell text-right font-semibold">
-                      {CURRENCY_SYMBOLS[r.currency] || 'Rs.'} {Number(r.amount).toLocaleString('en-LK', { minimumFractionDigits: 2 })}
-                    </td>
+                    <td className="table-cell text-right font-semibold">{formatByCurrency(Number(r.amount_primary != null ? r.amount_primary : r.amount), defaultCurrency)}</td>
                     <td className="table-cell">
                       <div>
                         <p className="text-sm">{r.next_payment_date}</p>

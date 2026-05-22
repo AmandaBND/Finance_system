@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { expenseApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
+import { expenseApi, formatByCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
 import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Search, Edit2, Trash2, X, Receipt } from 'lucide-react'
@@ -61,18 +61,18 @@ export default function Expenses() {
     await expenseApi.delete(r.id); toast.success('Deleted'); load()
   }
 
-  const total = records.reduce((s, r) => s + r.amount, 0)
+  const total = records.reduce((s, r) => s + Number(r.amount_primary != null ? r.amount_primary : r.amount), 0)
   const byCategory: any = {}
-  records.forEach(r => { byCategory[r.category] = (byCategory[r.category] || 0) + r.amount })
+  records.forEach(r => { byCategory[r.category] = (byCategory[r.category] || 0) + Number(r.amount_primary != null ? r.amount_primary : r.amount) })
   const topCat = Object.entries(byCategory).sort((a: any, b: any) => b[1] - a[1]).slice(0, 3)
 
   return (
     <div className="space-y-5 fade-in">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-4"><p className="text-xs text-slate-500">Total Expenses</p><p className="text-xl font-bold text-red-500 mt-1">{formatCurrency(total)}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500">Total Expenses</p><p className="text-xl font-bold text-red-500 mt-1">{formatByCurrency(total, defaultCurrency)}</p></div>
         <div className="card p-4"><p className="text-xs text-slate-500">Total Records</p><p className="text-xl font-bold text-slate-700 mt-1">{records.length}</p></div>
         {topCat.slice(0,2).map(([cat, amt]: any) => (
-          <div key={cat} className="card p-4"><p className="text-xs text-slate-500">{cat}</p><p className="text-xl font-bold text-amber-600 mt-1">{formatCurrency(amt)}</p></div>
+          <div key={cat} className="card p-4"><p className="text-xs text-slate-500">{cat}</p><p className="text-xl font-bold text-amber-600 mt-1">{formatByCurrency(amt, defaultCurrency)}</p></div>
         ))}
       </div>
 
@@ -111,9 +111,7 @@ export default function Expenses() {
                   <td className="table-cell text-slate-500">{r.vendor || '-'}</td>
                   <td className="table-cell text-xs text-slate-400">{r.payment_date}</td>
                   <td className="table-cell text-center"><span className="badge bg-slate-100 text-slate-700 font-mono">{r.currency || 'LKR'}</span></td>
-                  <td className="table-cell text-right font-semibold text-red-600">
-                    {CURRENCY_SYMBOLS[r.currency] || 'Rs.'} {Number(r.amount).toLocaleString('en-LK', { minimumFractionDigits: 2 })}
-                  </td>
+                  <td className="table-cell text-right font-semibold text-red-600">{formatByCurrency(Number(r.amount_primary != null ? r.amount_primary : r.amount), defaultCurrency)}</td>
                   <td className="table-cell text-xs text-slate-400">{r.payment_method || '-'}</td>
                   <td className="table-cell text-center">{r.is_recurring ? <span className="badge bg-purple-100 text-purple-700">{r.billing_cycle || 'Yes'}</span> : '—'}</td>
                   <td className="table-cell">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { invoiceApi, clientApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
+import { invoiceApi, clientApi, formatByCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
 import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Search, Send, CheckCircle, Download, Trash2, Edit2, X, Building2, CreditCard } from 'lucide-react'
@@ -190,7 +190,7 @@ export default function Invoices() {
                   <td className="table-cell text-xs text-slate-500">{inv.issue_date}</td>
                   <td className="table-cell text-xs text-slate-500">{inv.due_date}</td>
                   <td className="table-cell text-center"><span className="badge bg-slate-100 text-slate-700 font-mono">{inv.currency || 'LKR'}</span></td>
-                  <td className="table-cell text-right font-semibold">{inv.currency_symbol || 'Rs.'} {Number(inv.total).toLocaleString('en-LK', {minimumFractionDigits: 2})}</td>
+                  <td className="table-cell text-right font-semibold">{formatByCurrency(Number(inv.amount_primary != null ? inv.amount_primary : inv.total), defaultCurrency)}</td>
                   <td className="table-cell text-center"><span className={`badge ${STATUS_COLORS[inv.status]}`}>{inv.status}</span></td>
                   <td className="table-cell">
                     <div className="flex items-center justify-center gap-1.5">

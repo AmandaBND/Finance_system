@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { revenueApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
+import { revenueApi, formatByCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
 import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Search, Edit2, Trash2, X, TrendingUp } from 'lucide-react'
@@ -59,15 +59,15 @@ export default function Revenue() {
     await revenueApi.delete(r.id); toast.success('Deleted'); load()
   }
 
-  const totalPaid = records.filter(r => r.payment_status === 'Paid').reduce((s, r) => s + r.amount, 0)
-  const totalPending = records.filter(r => r.payment_status === 'Pending').reduce((s, r) => s + r.amount, 0)
+  const totalPaid = records.filter(r => r.payment_status === 'Paid').reduce((s, r) => s + Number(r.amount_primary != null ? r.amount_primary : r.amount), 0)
+  const totalPending = records.filter(r => r.payment_status === 'Pending').reduce((s, r) => s + Number(r.amount_primary != null ? r.amount_primary : r.amount), 0)
 
   return (
     <div className="space-y-5 fade-in">
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="card p-4"><p className="text-xs text-slate-500">Total Received</p><p className="text-xl font-bold text-emerald-600 mt-1">{formatCurrency(totalPaid)}</p></div>
-        <div className="card p-4"><p className="text-xs text-slate-500">Pending</p><p className="text-xl font-bold text-amber-500 mt-1">{formatCurrency(totalPending)}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500">Total Received</p><p className="text-xl font-bold text-emerald-600 mt-1">{formatByCurrency(totalPaid, defaultCurrency)}</p></div>
+        <div className="card p-4"><p className="text-xs text-slate-500">Pending</p><p className="text-xl font-bold text-amber-500 mt-1">{formatByCurrency(totalPending, defaultCurrency)}</p></div>
         <div className="card p-4"><p className="text-xs text-slate-500">Total Records</p><p className="text-xl font-bold text-slate-700 mt-1">{records.length}</p></div>
       </div>
 
@@ -94,6 +94,7 @@ export default function Revenue() {
               <th className="table-header text-left">Invoice Date</th>
               <th className="table-header text-center">Currency</th>
               <th className="table-header text-right">Amount</th>
+              <th className="table-header text-right">Amount in secondary</th>
               <th className="table-header text-left">Method</th>
               <th className="table-header text-center">Status</th>
               <th className="table-header text-center">Recurring</th>
@@ -109,9 +110,8 @@ export default function Revenue() {
                   <td className="table-cell text-slate-500">{r.service_type || '-'}</td>
                   <td className="table-cell text-xs text-slate-400">{r.invoice_date}</td>
                   <td className="table-cell text-center"><span className="badge bg-slate-100 text-slate-700 font-mono">{r.currency || 'LKR'}</span></td>
-                  <td className="table-cell text-right font-semibold text-slate-700">
-                    {CURRENCY_SYMBOLS[r.currency] || 'Rs.'} {Number(r.amount).toLocaleString('en-LK', { minimumFractionDigits: 2 })}
-                  </td>
+                  <td className="table-cell text-right font-semibold text-slate-700">{formatByCurrency(Number(r.amount_primary != null ? r.amount_primary : r.amount), defaultCurrency)}</td>
+                  <td className="table-cell text-right text-slate-600">{CURRENCY_SYMBOLS[r.currency] || 'Rs.'} {Number(r.amount).toLocaleString('en-LK', { minimumFractionDigits: 2 })}</td>
                   <td className="table-cell text-xs text-slate-400">{r.payment_method || '-'}</td>
                   <td className="table-cell text-center"><span className={`badge ${STATUS_COLORS[r.payment_status]}`}>{r.payment_status}</span></td>
                   <td className="table-cell text-center">{r.is_recurring ? <span className="badge bg-purple-100 text-purple-700">{r.billing_cycle}</span> : <span className="text-slate-400 text-xs">—</span>}</td>

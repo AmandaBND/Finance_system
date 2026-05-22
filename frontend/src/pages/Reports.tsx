@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { reportApi, formatCurrency } from '../services/api'
+import { reportApi, formatByCurrency } from '../services/api'
+import { useCompanySettings } from '../hooks/useSettings'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { format } from 'date-fns'
 
@@ -12,10 +13,13 @@ export default function Reports() {
   const [expData, setExpData] = useState<any>(null)
   const [cfData, setCfData] = useState<any>(null)
   const [payrollData, setPayrollData] = useState<any>(null)
+  const { defaultCurrency } = useCompanySettings()
   const [month, setMonth] = useState(format(new Date(), 'yyyy-MM'))
   const [year, setYear] = useState(format(new Date(), 'yyyy'))
 
-  useEffect(() => { loadAll() }, [month, year])
+  const fmt = (value: number) => formatByCurrency(value, defaultCurrency)
+
+  useEffect(() => { loadAll() }, [month, year, defaultCurrency])
 
   async function loadAll() {
     try {
@@ -61,21 +65,21 @@ export default function Reports() {
       {tab === 'pl' && plData && (
         <div className="space-y-5">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="card p-4 border-l-4 border-emerald-400"><p className="text-xs text-slate-500">Total Revenue</p><p className="text-xl font-bold text-emerald-600">{formatCurrency(plData.revenue)}</p></div>
-            <div className="card p-4 border-l-4 border-red-400"><p className="text-xs text-slate-500">Total Expenses</p><p className="text-xl font-bold text-red-500">{formatCurrency(plData.totalExpenses + plData.salaries)}</p></div>
-            <div className="card p-4 border-l-4 border-blue-400"><p className="text-xs text-slate-500">Net Profit</p><p className={`text-xl font-bold ${plData.netProfit >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatCurrency(plData.netProfit)}</p></div>
+            <div className="card p-4 border-l-4 border-emerald-400"><p className="text-xs text-slate-500">Total Revenue</p><p className="text-xl font-bold text-emerald-600">{fmt(plData.revenue)}</p></div>
+            <div className="card p-4 border-l-4 border-red-400"><p className="text-xs text-slate-500">Total Expenses</p><p className="text-xl font-bold text-red-500">{fmt(plData.totalExpenses + plData.salaries)}</p></div>
+            <div className="card p-4 border-l-4 border-blue-400"><p className="text-xs text-slate-500">Net Profit</p><p className={`text-xl font-bold ${plData.netProfit >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{fmt(plData.netProfit)}</p></div>
             <div className="card p-4 border-l-4 border-purple-400"><p className="text-xs text-slate-500">Profit Margin</p><p className="text-xl font-bold text-purple-600">{plData.profitMargin}%</p></div>
           </div>
           <div className="card p-5">
             <h3 className="section-title mb-4">P&L Statement — {plData.period}</h3>
             <table className="w-full">
               <tbody className="text-sm">
-                <tr className="border-b border-slate-100"><td className="py-3 font-semibold text-slate-700">REVENUE</td><td className="py-3 text-right font-bold text-emerald-600">{formatCurrency(plData.revenue)}</td></tr>
-                <tr className="border-b border-slate-100 bg-slate-50"><td className="py-2 pl-4 text-slate-500">Gross Revenue</td><td className="py-2 text-right text-slate-600">{formatCurrency(plData.revenue)}</td></tr>
-                <tr className="border-b border-slate-100 mt-2"><td className="py-3 font-semibold text-slate-700">EXPENSES</td><td className="py-3 text-right font-bold text-red-500">{formatCurrency(plData.totalExpenses)}</td></tr>
-                {plData.expenses.map((e: any) => <tr key={e.category} className="border-b border-slate-50 bg-slate-50"><td className="py-2 pl-4 text-slate-500">{e.category}</td><td className="py-2 text-right text-slate-600">{formatCurrency(e.total)}</td></tr>)}
-                <tr className="border-b border-slate-100"><td className="py-3 pl-4 text-slate-600 font-medium">Salaries & Payroll</td><td className="py-3 text-right text-slate-600">{formatCurrency(plData.salaries)}</td></tr>
-                <tr className="bg-slate-50 border-t-2 border-slate-200"><td className="py-4 font-bold text-lg text-slate-800">NET PROFIT</td><td className={`py-4 text-right font-bold text-xl ${plData.netProfit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(plData.netProfit)}</td></tr>
+                <tr className="border-b border-slate-100"><td className="py-3 font-semibold text-slate-700">REVENUE</td><td className="py-3 text-right font-bold text-emerald-600">{fmt(plData.revenue)}</td></tr>
+                <tr className="border-b border-slate-100 bg-slate-50"><td className="py-2 pl-4 text-slate-500">Gross Revenue</td><td className="py-2 text-right text-slate-600">{fmt(plData.revenue)}</td></tr>
+                <tr className="border-b border-slate-100 mt-2"><td className="py-3 font-semibold text-slate-700">EXPENSES</td><td className="py-3 text-right font-bold text-red-500">{fmt(plData.totalExpenses)}</td></tr>
+                {plData.expenses.map((e: any) => <tr key={e.category} className="border-b border-slate-50 bg-slate-50"><td className="py-2 pl-4 text-slate-500">{e.category}</td><td className="py-2 text-right text-slate-600">{fmt(e.total)}</td></tr>)}
+                <tr className="border-b border-slate-100"><td className="py-3 pl-4 text-slate-600 font-medium">Salaries & Payroll</td><td className="py-3 text-right text-slate-600">{fmt(plData.salaries)}</td></tr>
+                <tr className="bg-slate-50 border-t-2 border-slate-200"><td className="py-4 font-bold text-lg text-slate-800">NET PROFIT</td><td className={`py-4 text-right font-bold text-xl ${plData.netProfit >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt(plData.netProfit)}</td></tr>
               </tbody>
             </table>
           </div>
@@ -86,7 +90,7 @@ export default function Reports() {
       {tab === 'revenue' && revData && (
         <div className="space-y-5">
           <div className="grid grid-cols-3 gap-4">
-            <div className="card p-4 col-span-3 lg:col-span-1"><p className="text-xs text-slate-500">Total Revenue {year}</p><p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(revData.total)}</p></div>
+            <div className="card p-4 col-span-3 lg:col-span-1"><p className="text-xs text-slate-500">Total Revenue {year}</p><p className="text-2xl font-bold text-emerald-600 mt-1">{fmt(revData.total)}</p></div>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="card p-5">
@@ -96,7 +100,7 @@ export default function Reports() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ borderRadius: '10px', fontSize: 12, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                  <Tooltip formatter={(v: any) => fmt(v)} contentStyle={{ borderRadius: '10px', fontSize: 12, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
                   <Bar dataKey="total" fill="#6366f1" radius={[4,4,0,0]} name="Revenue" />
                 </BarChart>
               </ResponsiveContainer>
@@ -108,7 +112,7 @@ export default function Reports() {
                   <Pie data={revData.byService} dataKey="total" nameKey="service_type" cx="50%" cy="50%" outerRadius={80} innerRadius={40} label={({ service_type, percent }) => `${service_type} ${(percent*100).toFixed(0)}%`}>
                     {revData.byService.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
-                  <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ borderRadius: '10px', fontSize: 12 }} />
+                  <Tooltip formatter={(v: any) => fmt(v)} contentStyle={{ borderRadius: '10px', fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -118,7 +122,7 @@ export default function Reports() {
             <table className="w-full">
               <thead><tr className="border-b border-slate-100"><th className="table-header text-left">Client</th><th className="table-header text-center">Invoices</th><th className="table-header text-right">Total Revenue</th></tr></thead>
               <tbody>
-                {revData.byClient.map((c: any) => <tr key={c.client_name} className="table-row"><td className="table-cell font-medium">{c.client_name}</td><td className="table-cell text-center text-slate-500">{c.count}</td><td className="table-cell text-right font-semibold text-emerald-600">{formatCurrency(c.total)}</td></tr>)}
+                {revData.byClient.map((c: any) => <tr key={c.client_name} className="table-row"><td className="table-cell font-medium">{c.client_name}</td><td className="table-cell text-center text-slate-500">{c.count}</td><td className="table-cell text-right font-semibold text-emerald-600">{fmt(c.total)}</td></tr>)}
               </tbody>
             </table>
           </div>
@@ -128,7 +132,7 @@ export default function Reports() {
       {/* Expenses Tab */}
       {tab === 'expenses' && expData && (
         <div className="space-y-5">
-          <div className="card p-4 inline-block"><p className="text-xs text-slate-500">Total Expenses {year}</p><p className="text-2xl font-bold text-red-500 mt-1">{formatCurrency(expData.total)}</p></div>
+          <div className="card p-4 inline-block"><p className="text-xs text-slate-500">Total Expenses {year}</p><p className="text-2xl font-bold text-red-500 mt-1">{fmt(expData.total)}</p></div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
             <div className="card p-5">
               <h3 className="section-title mb-4">Expenses by Month</h3>
@@ -137,7 +141,7 @@ export default function Reports() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ borderRadius: '10px', fontSize: 12, border: 'none' }} />
+                  <Tooltip formatter={(v: any) => fmt(v)} contentStyle={{ borderRadius: '10px', fontSize: 12, border: 'none' }} />
                   <Bar dataKey="total" fill="#f59e0b" radius={[4,4,0,0]} name="Expenses" />
                 </BarChart>
               </ResponsiveContainer>
@@ -155,7 +159,7 @@ export default function Reports() {
                       <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div className="h-full rounded-full" style={{ width: `${(c.total / expData.total * 100)}%`, background: COLORS[i % COLORS.length] }}></div>
                       </div>
-                      <span className="text-sm font-medium text-slate-700 w-28 text-right">{formatCurrency(c.total)}</span>
+                      <span className="text-sm font-medium text-slate-700 w-28 text-right">{fmt(c.total)}</span>
                     </div>
                   </div>
                 ))}
@@ -175,7 +179,7 @@ export default function Reports() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-                <Tooltip formatter={(v: any) => formatCurrency(v)} contentStyle={{ borderRadius: '10px', fontSize: 12, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
+                <Tooltip formatter={(v: any) => fmt(v)} contentStyle={{ borderRadius: '10px', fontSize: 12, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="inflow" fill="#10b981" radius={[4,4,0,0]} name="Cash In" />
                 <Bar dataKey="outflow" fill="#ef4444" radius={[4,4,0,0]} name="Cash Out" />
@@ -188,9 +192,9 @@ export default function Reports() {
               <tbody>
                 {cfData.months.map((m: any) => <tr key={m.month} className="table-row">
                   <td className="table-cell font-medium">{m.label} {year}</td>
-                  <td className="table-cell text-right text-emerald-600 font-medium">{formatCurrency(m.inflow)}</td>
-                  <td className="table-cell text-right text-red-500 font-medium">{formatCurrency(m.outflow)}</td>
-                  <td className={`table-cell text-right font-bold ${m.net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{formatCurrency(m.net)}</td>
+                  <td className="table-cell text-right text-emerald-600 font-medium">{fmt(m.inflow)}</td>
+                  <td className="table-cell text-right text-red-500 font-medium">{fmt(m.outflow)}</td>
+                  <td className={`table-cell text-right font-bold ${m.net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt(m.net)}</td>
                 </tr>)}
               </tbody>
             </table>
@@ -202,9 +206,9 @@ export default function Reports() {
       {tab === 'payroll' && payrollData && (
         <div className="space-y-5">
           <div className="grid grid-cols-4 gap-4">
-            <div className="card p-4"><p className="text-xs text-slate-500">Total Payroll</p><p className="text-xl font-bold text-slate-700 mt-1">{formatCurrency(payrollData.totals?.total_net || 0)}</p></div>
-            <div className="card p-4"><p className="text-xs text-slate-500">Base Salaries</p><p className="text-xl font-bold text-blue-600 mt-1">{formatCurrency(payrollData.totals?.total_base || 0)}</p></div>
-            <div className="card p-4"><p className="text-xs text-slate-500">Total Bonuses</p><p className="text-xl font-bold text-emerald-600 mt-1">{formatCurrency(payrollData.totals?.total_bonuses || 0)}</p></div>
+            <div className="card p-4"><p className="text-xs text-slate-500">Total Payroll</p><p className="text-xl font-bold text-slate-700 mt-1">{fmt(payrollData.totals?.total_net || 0)}</p></div>
+            <div className="card p-4"><p className="text-xs text-slate-500">Base Salaries</p><p className="text-xl font-bold text-blue-600 mt-1">{fmt(payrollData.totals?.total_base || 0)}</p></div>
+            <div className="card p-4"><p className="text-xs text-slate-500">Total Bonuses</p><p className="text-xl font-bold text-emerald-600 mt-1">{fmt(payrollData.totals?.total_bonuses || 0)}</p></div>
             <div className="card p-4"><p className="text-xs text-slate-500">Employees</p><p className="text-xl font-bold text-slate-700 mt-1">{payrollData.totals?.count || 0}</p></div>
           </div>
           <div className="card overflow-hidden">
@@ -223,10 +227,10 @@ export default function Reports() {
                   : payrollData.records.map((r: any) => <tr key={r.id} className="table-row">
                       <td className="table-cell font-medium">{r.employee_name}</td>
                       <td className="table-cell text-slate-500 text-xs">{r.position || '-'}</td>
-                      <td className="table-cell text-right">{formatCurrency(r.base_salary)}</td>
-                      <td className="table-cell text-right text-emerald-600">+{formatCurrency(r.bonuses)}</td>
-                      <td className="table-cell text-right text-red-500">-{formatCurrency(r.deductions)}</td>
-                      <td className="table-cell text-right font-bold">{formatCurrency(r.net_salary)}</td>
+                      <td className="table-cell text-right">{fmt(r.base_salary)}</td>
+                      <td className="table-cell text-right text-emerald-600">+{fmt(r.bonuses)}</td>
+                      <td className="table-cell text-right text-red-500">-{fmt(r.deductions)}</td>
+                      <td className="table-cell text-right font-bold">{fmt(r.net_salary)}</td>
                       <td className="table-cell text-center"><span className={`badge ${r.status === 'Paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{r.status}</span></td>
                     </tr>)}
               </tbody>
