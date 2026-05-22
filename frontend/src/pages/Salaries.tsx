@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { salaryApi, employeeApi, employeeAdminApi, formatCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
+import { salaryApi, employeeApi, employeeAdminApi, formatByCurrency, SUPPORTED_CURRENCIES, CURRENCY_SYMBOLS } from '../services/api'
 import { useCompanySettings } from '../hooks/useSettings'
 import PrimaryCurrencyAmountField, { validatePrimaryAmount, needsPrimaryConversion } from '../components/PrimaryCurrencyAmountField'
 import { Plus, Edit2, Trash2, X, Send, Download, CheckCircle, Users2, Zap, Briefcase } from 'lucide-react'
@@ -121,8 +121,8 @@ export default function Salaries() {
     } catch (err: any) { toast.error(err.response?.data?.error || 'Error') }
   }
 
-  const netPaid = records.filter(r => r.status === 'Paid').reduce((s, r) => s + r.net_salary, 0)
-  const netPending = records.filter(r => r.status === 'Pending').reduce((s, r) => s + r.net_salary, 0)
+  const netPaid = records.filter(r => r.status === 'Paid').reduce((s, r) => s + Number(r.net_salary_primary != null ? r.net_salary_primary : r.net_salary), 0)
+  const netPending = records.filter(r => r.status === 'Pending').reduce((s, r) => s + Number(r.net_salary_primary != null ? r.net_salary_primary : r.net_salary), 0)
 
   return (
     <div className="space-y-5 fade-in">
@@ -135,8 +135,8 @@ export default function Salaries() {
 
       {tab === 'payments' && <>
         <div className="grid grid-cols-3 gap-4">
-          <div className="card p-4"><p className="text-xs text-slate-500">Paid This Month</p><p className="text-xl font-bold text-emerald-600 mt-1">{formatCurrency(netPaid)}</p></div>
-          <div className="card p-4"><p className="text-xs text-slate-500">Pending</p><p className="text-xl font-bold text-amber-500 mt-1">{formatCurrency(netPending)}</p></div>
+          <div className="card p-4"><p className="text-xs text-slate-500">Paid This Month</p><p className="text-xl font-bold text-emerald-600 mt-1">{formatByCurrency(netPaid, defaultCurrency)}</p></div>
+          <div className="card p-4"><p className="text-xs text-slate-500">Pending</p><p className="text-xl font-bold text-amber-500 mt-1">{formatByCurrency(netPending, defaultCurrency)}</p></div>
           <div className="card p-4"><p className="text-xs text-slate-500">Total Employees</p><p className="text-xl font-bold text-slate-700 mt-1">{employees.filter(e => e.status === 'Active').length}</p></div>
         </div>
 
@@ -176,7 +176,7 @@ export default function Salaries() {
                     <td className="table-cell text-right">{CURRENCY_SYMBOLS[r.currency] || 'Rs.'} {Number(r.base_salary).toLocaleString()}</td>
                     <td className="table-cell text-right text-emerald-600">+{CURRENCY_SYMBOLS[r.currency] || 'Rs.'} {Number(r.bonuses).toLocaleString()}</td>
                     <td className="table-cell text-right text-red-500">-{CURRENCY_SYMBOLS[r.currency] || 'Rs.'} {Number(r.deductions).toLocaleString()}</td>
-                    <td className="table-cell text-right font-bold text-slate-800">{CURRENCY_SYMBOLS[r.currency] || 'Rs.'} {Number(r.net_salary).toLocaleString()}</td>
+                    <td className="table-cell text-right font-bold text-slate-800">{formatByCurrency(Number(r.net_salary_primary != null ? r.net_salary_primary : r.net_salary), defaultCurrency)}</td>
                     <td className="table-cell text-center"><span className={`badge ${STATUS_COLORS[r.status]}`}>{r.status}</span></td>
                     <td className="table-cell text-center">{r.slip_sent ? <span className="text-emerald-500 text-xs">✓ Sent</span> : <span className="text-slate-300 text-xs">—</span>}</td>
                     <td className="table-cell">
@@ -224,7 +224,7 @@ export default function Salaries() {
                       <td className="table-cell text-slate-500">{e.position || '-'}</td>
                       <td className="table-cell text-slate-500">{e.department || '-'}</td>
                       <td className="table-cell text-xs text-slate-400">{e.email || '-'}</td>
-                      <td className="table-cell text-right font-semibold">{formatCurrency(e.base_salary)}</td>
+                      <td className="table-cell text-right font-semibold">{formatByCurrency(e.base_salary, defaultCurrency)}</td>
                       <td className="table-cell text-center"><span className="badge bg-blue-100 text-blue-700">{e.salary_type}</span></td>
                       <td className="table-cell text-center"><span className={`badge ${e.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{e.status}</span></td>
                       <td className="table-cell text-center">
