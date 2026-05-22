@@ -176,13 +176,14 @@ export default function Invoices() {
               <th className="table-header text-left">Issue Date</th>
               <th className="table-header text-left">Due Date</th>
               <th className="table-header text-center">Currency</th>
+              <th className="table-header text-right">Amount in secondary</th>
               <th className="table-header text-right">Total</th>
               <th className="table-header text-center">Status</th>
               <th className="table-header text-center">Actions</th>
             </tr></thead>
             <tbody>
               {invoices.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-slate-400">No invoices found</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-slate-400">No invoices found</td></tr>
               ) : invoices.map(inv => (
                 <tr key={inv.id} className="table-row">
                   <td className="table-cell font-mono text-xs text-primary font-semibold">{inv.invoice_number}</td>
@@ -190,6 +191,7 @@ export default function Invoices() {
                   <td className="table-cell text-xs text-slate-500">{inv.issue_date}</td>
                   <td className="table-cell text-xs text-slate-500">{inv.due_date}</td>
                   <td className="table-cell text-center"><span className="badge bg-slate-100 text-slate-700 font-mono">{inv.currency || 'LKR'}</span></td>
+                  <td className="table-cell text-right font-semibold text-slate-700">{formatByCurrency(Number(inv.total), inv.currency || defaultCurrency)}</td>
                   <td className="table-cell text-right font-semibold">{formatByCurrency(Number(inv.amount_primary != null ? inv.amount_primary : inv.total), defaultCurrency)}</td>
                   <td className="table-cell text-center"><span className={`badge ${STATUS_COLORS[inv.status]}`}>{inv.status}</span></td>
                   <td className="table-cell">

@@ -96,6 +96,7 @@ export default function Expenses() {
               <th className="table-header text-left">Vendor</th>
               <th className="table-header text-left">Date</th>
               <th className="table-header text-center">Currency</th>
+              <th className="table-header text-right">Amount in secondary</th>
               <th className="table-header text-right">Amount</th>
               <th className="table-header text-left">Method</th>
               <th className="table-header text-center">Recurring</th>
@@ -103,7 +104,7 @@ export default function Expenses() {
             </tr></thead>
             <tbody>
               {records.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-slate-400">No expenses found</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-slate-400">No expenses found</td></tr>
               ) : records.map(r => (
                 <tr key={r.id} className="table-row">
                   <td className="table-cell font-medium">{r.title}</td>
@@ -111,6 +112,7 @@ export default function Expenses() {
                   <td className="table-cell text-slate-500">{r.vendor || '-'}</td>
                   <td className="table-cell text-xs text-slate-400">{r.payment_date}</td>
                   <td className="table-cell text-center"><span className="badge bg-slate-100 text-slate-700 font-mono">{r.currency || 'LKR'}</span></td>
+                  <td className="table-cell text-right font-semibold text-slate-700">{formatByCurrency(Number(r.amount), r.currency || defaultCurrency)}</td>
                   <td className="table-cell text-right font-semibold text-red-600">{formatByCurrency(Number(r.amount_primary != null ? r.amount_primary : r.amount), defaultCurrency)}</td>
                   <td className="table-cell text-xs text-slate-400">{r.payment_method || '-'}</td>
                   <td className="table-cell text-center">{r.is_recurring ? <span className="badge bg-purple-100 text-purple-700">{r.billing_cycle || 'Yes'}</span> : '—'}</td>

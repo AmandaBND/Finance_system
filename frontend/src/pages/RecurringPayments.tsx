@@ -117,6 +117,7 @@ export default function RecurringPayments() {
               <th className="table-header text-left">Client/Vendor</th>
               <th className="table-header text-center">Cycle</th>
               <th className="table-header text-center">Currency</th>
+              <th className="table-header text-right">Amount in secondary</th>
               <th className="table-header text-right">Amount</th>
               <th className="table-header text-left">Next Date</th>
               <th className="table-header text-center">Reminder</th>
@@ -125,7 +126,7 @@ export default function RecurringPayments() {
             </tr></thead>
             <tbody>
               {records.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-12 text-slate-400">No recurring payments added yet</td></tr>
+                <tr><td colSpan={11} className="text-center py-12 text-slate-400">No recurring payments added yet</td></tr>
               ) : records.map(r => {
                 const daysLeft = r.next_payment_date ? Math.floor((new Date(r.next_payment_date).getTime() - Date.now()) / 86400000) : null
                 return (
@@ -135,6 +136,7 @@ export default function RecurringPayments() {
                     <td className="table-cell text-slate-500 text-sm">{r.client_vendor || '-'}</td>
                     <td className="table-cell text-center"><span className="badge bg-slate-100 text-slate-600">{r.billing_cycle}</span></td>
                     <td className="table-cell text-center"><span className="badge bg-slate-100 text-slate-700 font-mono">{r.currency || 'LKR'}</span></td>
+                    <td className="table-cell text-right font-semibold text-slate-700">{formatByCurrency(Number(r.amount), r.currency || defaultCurrency)}</td>
                     <td className="table-cell text-right font-semibold">{formatByCurrency(Number(r.amount_primary != null ? r.amount_primary : r.amount), defaultCurrency)}</td>
                     <td className="table-cell">
                       <div>
